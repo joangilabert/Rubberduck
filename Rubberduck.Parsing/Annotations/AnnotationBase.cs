@@ -1,39 +1,28 @@
-﻿using Rubberduck.VBEditor;
+﻿using System.Collections.Generic;
+using System.Linq;
 
 namespace Rubberduck.Parsing.Annotations
 {
     public abstract class AnnotationBase : IAnnotation
     {
-        private readonly AnnotationType _annotationType;
-        private readonly QualifiedSelection _qualifiedSelection;
+        public bool AllowMultiple { get; }
+        public int RequiredArguments { get; }
+        public int? AllowedArguments { get; }
+        public string Name { get; }
+        public AnnotationTarget Target { get; }
 
-        public const string ANNOTATION_MARKER = "'@";
-
-        public AnnotationBase(AnnotationType annotationType, QualifiedSelection qualifiedSelection)
+        protected AnnotationBase(string name, AnnotationTarget target, int requiredArguments = 0, int? allowedArguments = 0, bool allowMultiple = false)
         {
-            _annotationType = annotationType;
-            _qualifiedSelection = qualifiedSelection;
+            Name = name;
+            Target = target;
+            AllowMultiple = allowMultiple;
+            RequiredArguments = requiredArguments;
+            AllowedArguments = allowedArguments;
         }
 
-        public AnnotationType AnnotationType
+        public virtual IReadOnlyList<string> ProcessAnnotationArguments(IEnumerable<string> arguments)
         {
-            get
-            {
-                return _annotationType;
-            }
-        }
-
-        public QualifiedSelection QualifiedSelection
-        {
-            get
-            {
-                return _qualifiedSelection;
-            }
-        }
-
-        public override string ToString()
-        {
-            return string.Format("Annotation Type: {0}", _annotationType);
+            return arguments.ToList();
         }
     }
 }

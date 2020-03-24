@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices.ComTypes;
+using System.Runtime.Serialization;
 
 namespace Rubberduck.Parsing.ComReflection
 {
@@ -10,12 +11,14 @@ namespace Rubberduck.Parsing.ComReflection
         bool IsPreDeclared { get; }
         bool IsHidden { get; }
         bool IsRestricted { get; }
-        bool IsExtensible { get; }
     }
 
     public interface IComTypeWithMembers : IComType
     {
         IEnumerable<ComMember> Members { get; }
+        IEnumerable<ComField> Properties { get; }
+        ComMember DefaultMember { get; }
+        bool IsExtensible { get; }
     }
 
     public interface IComTypeWithFields : IComType
@@ -23,36 +26,42 @@ namespace Rubberduck.Parsing.ComReflection
         IEnumerable<ComField> Fields { get; }
     }
 
-    [DebuggerDisplay("{Name}")]
+    [DataContract]
+    [KnownType(typeof(ComBase))]
+    [DebuggerDisplay("{" + nameof(Name) + "}")]
     public abstract class ComType : ComBase, IComType
     {
+        [DataMember(IsRequired = true)]
         public bool IsAppObject { get; private set; }
+
+        [DataMember(IsRequired = true)]
         public bool IsPreDeclared { get; private set; }
+
+        [DataMember(IsRequired = true)]
         public bool IsHidden { get; private set; }
+
+        [DataMember(IsRequired = true)]
         public bool IsRestricted { get; private set; }
-        public bool IsExtensible { get; private set; }
-        
-        protected ComType(ITypeInfo info, TYPEATTR attrib)
-            : base(info)
-        {
-            SetFlagsFromTypeAttr(attrib);
-        }
 
-        protected ComType(ITypeLib typeLib, TYPEATTR attrib, int index)
-            : base(typeLib, index)
-        {
-            Index = index;
-            SetFlagsFromTypeAttr(attrib);
-        }
-
-        private void SetFlagsFromTypeAttr(TYPEATTR attrib)
+        protected ComType(IComBase parent, ITypeInfo info, TYPEATTR attrib)
+            : base(parent, info)
         {
             Guid = attrib.guid;
             IsAppObject = attrib.wTypeFlags.HasFlag(TYPEFLAGS.TYPEFLAG_FAPPOBJECT);
             IsPreDeclared = attrib.wTypeFlags.HasFlag(TYPEFLAGS.TYPEFLAG_FPREDECLID);
             IsHidden = attrib.wTypeFlags.HasFlag(TYPEFLAGS.TYPEFLAG_FHIDDEN);
             IsRestricted = attrib.wTypeFlags.HasFlag(TYPEFLAGS.TYPEFLAG_FRESTRICTED);
-            IsExtensible = !attrib.wTypeFlags.HasFlag(TYPEFLAGS.TYPEFLAG_FNONEXTENSIBLE);
+        }
+
+        protected ComType(IComBase parent, ITypeLib typeLib, TYPEATTR attrib, int index)
+            : base(parent, typeLib, index)
+        {
+            Index = index;
+            Guid = attrib.guid;
+            IsAppObject = attrib.wTypeFlags.HasFlag(TYPEFLAGS.TYPEFLAG_FAPPOBJECT);
+            IsPreDeclared = attrib.wTypeFlags.HasFlag(TYPEFLAGS.TYPEFLAG_FPREDECLID);
+            IsHidden = attrib.wTypeFlags.HasFlag(TYPEFLAGS.TYPEFLAG_FHIDDEN);
+            IsRestricted = attrib.wTypeFlags.HasFlag(TYPEFLAGS.TYPEFLAG_FRESTRICTED);
         }
     }
 }

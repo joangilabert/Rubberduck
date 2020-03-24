@@ -1,18 +1,19 @@
-﻿using Rubberduck.Parsing.ComReflection;
+﻿using System;
+using Rubberduck.Parsing.ComReflection;
 using Rubberduck.VBEditor;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace Rubberduck.Parsing.Symbols
 {
-    public sealed class ProjectDeclaration : Declaration
+    public sealed class ProjectDeclaration : Declaration, IDisposable
     {
         private readonly List<ProjectReference> _projectReferences;
 
         public ProjectDeclaration(
             QualifiedMemberName qualifiedName,
             string name,
-            bool isBuiltIn)
+            bool isUserDefined)
             : base(
                   qualifiedName,
                   null,
@@ -24,23 +25,26 @@ namespace Rubberduck.Parsing.Symbols
                   Accessibility.Implicit,
                   DeclarationType.Project,
                   null,
+                  null,
                   Selection.Home,
                   false,
                   null,
-                  isBuiltIn)
+                  isUserDefined)
         {
             _projectReferences = new List<ProjectReference>();
         }
 
         public ProjectDeclaration(ComProject project, QualifiedModuleName module)
-            : this(module.QualifyMemberName(project.Name), project.Name, true)
+            : this(module.QualifyMemberName(project.Name), project.Name, false)
         {
+            Guid = project.Guid;
             MajorVersion = project.MajorVersion;
             MinorVersion = project.MinorVersion;
         }
 
-        public long MajorVersion { get; set; }
-        public long MinorVersion { get; set; }
+        public Guid Guid { get; }
+        public long MajorVersion { get; }
+        public long MinorVersion { get; }
 
         public IReadOnlyList<ProjectReference> ProjectReferences
         {
@@ -57,6 +61,18 @@ namespace Rubberduck.Parsing.Symbols
                 return;
             }
             _projectReferences.Add(new ProjectReference(referencedProjectId, priority));
+        }
+
+        public void ClearProjectReferences()
+        {
+            _projectReferences.Clear();
+        }
+
+        public bool IsDisposed { get; private set; }
+
+        public void Dispose()
+        {
+            IsDisposed = true;
         }
     }
 }

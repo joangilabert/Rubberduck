@@ -1,80 +1,43 @@
 using System.Linq;
-using System.Threading;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Moq;
-using Rubberduck.Inspections;
-using Rubberduck.Inspections.QuickFixes;
-using Rubberduck.Inspections.Resources;
+using NUnit.Framework;
+using Rubberduck.CodeAnalysis.Inspections;
+using Rubberduck.CodeAnalysis.Inspections.Concrete;
 using Rubberduck.Parsing.VBA;
-using Rubberduck.VBEditor.Application;
-using Rubberduck.VBEditor.Events;
-using Rubberduck.VBEditor.SafeComWrappers.Abstract;
-using RubberduckTests.Mocks;
 
 namespace RubberduckTests.Inspections
 {
-    [TestClass]
-    public class ConstantNotUsedInspectionTests
+    [TestFixture]
+    public class ConstantNotUsedInspectionTests : InspectionTestsBase
     {
-        [TestMethod]
-        [TestCategory("Inspections")]
+        [Test]
+        [Category("Inspections")]
         public void ConstantNotUsed_ReturnsResult()
         {
             const string inputCode =
-@"Public Sub Foo()
+                @"Public Sub Foo()
     Const const1 As Integer = 9
 End Sub";
-
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component);
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var inspection = new ConstantNotUsedInspection(parser.State);
-            var inspectionResults = inspection.GetInspectionResults();
-
-            Assert.AreEqual(1, inspectionResults.Count());
+            Assert.AreEqual(1, InspectionResultsForStandardModule(inputCode).Count());
         }
 
-        [TestMethod]
-        [TestCategory("Inspections")]
+        [Test]
+        [Category("Inspections")]
         public void ConstantNotUsed_ReturnsResult_MultipleConsts()
         {
             const string inputCode =
-@"Public Sub Foo()
+                @"Public Sub Foo()
     Const const1 As Integer = 9
     Const const2 As String = ""test""
 End Sub";
-
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component);
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var inspection = new ConstantNotUsedInspection(parser.State);
-            var inspectionResults = inspection.GetInspectionResults();
-
-            Assert.AreEqual(2, inspectionResults.Count());
+            Assert.AreEqual(2, InspectionResultsForStandardModule(inputCode).Count());
         }
 
-        [TestMethod]
-        [TestCategory("Inspections")]
+        [Test]
+        [Category("Inspections")]
         public void ConstantNotUsed_ReturnsResult_UnusedConstant()
         {
             const string inputCode =
-@"Public Sub Foo()
+                @"Public Sub Foo()
     Const const1 As Integer = 9
     Goo const1
 
@@ -83,167 +46,107 @@ End Sub
 
 Public Sub Goo(ByVal arg1 As Integer)
 End Sub";
-
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component);
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var inspection = new ConstantNotUsedInspection(parser.State);
-            var inspectionResults = inspection.GetInspectionResults();
-
-            Assert.AreEqual(1, inspectionResults.Count());
+            Assert.AreEqual(1, InspectionResultsForStandardModule(inputCode).Count());
         }
 
-        [TestMethod]
-        [TestCategory("Inspections")]
+        [Test]
+        [Category("Inspections")]
         public void ConstantNotUsed_DoesNotReturnResult()
         {
             const string inputCode =
-@"Public Sub Foo()
+                @"Public Sub Foo()
     Const const1 As Integer = 9
     Goo const1
 End Sub
 
 Public Sub Goo(ByVal arg1 As Integer)
 End Sub";
-
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component);
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var inspection = new ConstantNotUsedInspection(parser.State);
-            var inspectionResults = inspection.GetInspectionResults();
-
-            Assert.AreEqual(0, inspectionResults.Count());
+            Assert.AreEqual(0, InspectionResultsForStandardModule(inputCode).Count());
         }
 
-        [TestMethod]
-        [TestCategory("Inspections")]
+        [Test]
+        [Category("Inspections")]
+        //See issue #4994 at https://github.com/rubberduck-vba/Rubberduck/issues/4994
+        public void ConstantNotUsed_ConstantOnlyUsedInMidStatement_DoesNotReturnResult()
+        {
+            const string inputCode =
+                @"Function UnAccent(ByVal inputString As String) As String
+          Dim Index As Long, Position As Long
+         Const ACCENTED_CHARS As String = ""äéöûü¿¡¬√ƒ≈«»… ÀÃÕŒœ–—“”‘’÷Ÿ⁄€‹›‡·‚„‰ÂÁËÈÍÎÏÌÓÔÒÚÛÙıˆ˘˙˚¸˝ˇ¯ÿüúå""
+         Const ANSICHARACTERS As String = ""SZszYAAAAAACEEEEIIIIDNOOOOOUUUUYaaaaaaceeeeiiiidnooooouuuuyyoOYoO""
+   For Index = 1 To Len(inputString)
+     Position = InStr(ACCENTED_CHARS, Mid$(inputString, Index, 1))
+     If Position Then Mid$(inputString, Index) = Mid$(ANSICHARACTERS, Position, 1)
+    Next
+     UnAccent = inputString
+End Function";
+            Assert.AreEqual(0, InspectionResultsForStandardModule(inputCode).Count());
+        }
+
+        [Test]
+        [Category("Inspections")]
+        public void ConstantNotUsed_IgnoreModule_All_YieldsNoResult()
+        {
+            const string inputCode =
+                @"'@IgnoreModule
+
+Public Sub Foo()
+    Const const1 As Integer = 9
+End Sub";
+            Assert.AreEqual(0, InspectionResultsForStandardModule(inputCode).Count());
+        }
+
+        [Test]
+        [Category("Inspections")]
+        public void ConstantNotUsed_IgnoreModule_AnnotationName_YieldsNoResult()
+        {
+            const string inputCode =
+                @"'@IgnoreModule ConstantNotUsed
+
+Public Sub Foo()
+    Const const1 As Integer = 9
+End Sub";
+            Assert.AreEqual(0, InspectionResultsForStandardModule(inputCode).Count());
+        }
+
+        [Test]
+        [Category("Inspections")]
+        public void ConstantNotUsed_IgnoreModule_OtherAnnotationName_YieldsResults()
+        {
+            const string inputCode =
+                @"'@IgnoreModule VariableNotUsed
+
+Public Sub Foo()
+    Const const1 As Integer = 9
+End Sub";
+            Assert.IsTrue(InspectionResultsForStandardModule(inputCode).Any());
+        }
+
+        [Test]
+        [Category("Inspections")]
         public void ConstantNotUsed_Ignored_DoesNotReturnResult()
         {
             const string inputCode =
-@"Public Sub Foo()
+                @"Public Sub Foo()
     '@Ignore ConstantNotUsed
     Const const1 As Integer = 9
 End Sub";
-
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component);
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var inspection = new ConstantNotUsedInspection(parser.State);
-            var inspectionResults = inspection.GetInspectionResults();
-
-            Assert.IsFalse(inspectionResults.Any());
+            Assert.AreEqual(0, InspectionResultsForStandardModule(inputCode).Count());
         }
 
-        [TestMethod]
-        [TestCategory("Inspections")]
-        public void ConstantNotUsed_QuickFixWorks()
-        {
-            const string inputCode =
-@"Public Sub Foo()
-    Const const1 As Integer = 9
-End Sub";
-
-            const string expectedCode =
-@"Public Sub Foo()
-End Sub";
-
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var inspection = new ConstantNotUsedInspection(parser.State);
-            var inspectionResults = inspection.GetInspectionResults();
-
-            inspectionResults.First().QuickFixes.First().Fix();
-
-            Assert.AreEqual(expectedCode, module.Content());
-        }
-
-        [TestMethod]
-        [TestCategory("Inspections")]
-        public void ConstantNotUsed_IgnoreQuickFixWorks()
-        {
-            const string inputCode =
-@"Public Sub Foo()
-    Const const1 As Integer = 9
-End Sub";
-
-            const string expectedCode =
-@"Public Sub Foo()
-'@Ignore ConstantNotUsed
-    Const const1 As Integer = 9
-End Sub";
-
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var inspection = new ConstantNotUsedInspection(parser.State);
-            var inspectionResults = inspection.GetInspectionResults();
-
-            inspectionResults.First().QuickFixes.Single(s => s is IgnoreOnceQuickFix).Fix();
-
-            Assert.AreEqual(expectedCode, module.Content());
-        }
-
-        [TestMethod]
-        [TestCategory("Inspections")]
-        public void InspectionType()
-        {
-            var inspection = new ConstantNotUsedInspection(null);
-            Assert.AreEqual(CodeInspectionType.CodeQualityIssues, inspection.InspectionType);
-        }
-
-        [TestMethod]
-        [TestCategory("Inspections")]
+        [Test]
+        [Category("Inspections")]
         public void InspectionName()
         {
             const string inspectionName = "ConstantNotUsedInspection";
             var inspection = new ConstantNotUsedInspection(null);
 
             Assert.AreEqual(inspectionName, inspection.Name);
+        }
+
+        protected override IInspection InspectionUnderTest(RubberduckParserState state)
+        {
+            return new ConstantNotUsedInspection(state);
         }
     }
 }

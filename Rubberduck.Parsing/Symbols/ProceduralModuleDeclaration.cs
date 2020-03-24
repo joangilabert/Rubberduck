@@ -1,46 +1,40 @@
 ﻿using Rubberduck.Parsing.Annotations;
 using Rubberduck.Parsing.ComReflection;
-using Rubberduck.Parsing.VBA;
 using Rubberduck.VBEditor;
 using System.Collections.Generic;
 
 namespace Rubberduck.Parsing.Symbols
 {
-    public sealed class ProceduralModuleDeclaration : Declaration
+    public sealed class ProceduralModuleDeclaration : ModuleDeclaration
     {
         public ProceduralModuleDeclaration(
             QualifiedMemberName qualifiedName,
             Declaration projectDeclaration,
             string name,
-            bool isBuiltIn,
-            IEnumerable<IAnnotation> annotations,
+            bool isUserDefined,
+            IEnumerable<IParseTreeAnnotation> annotations,
             Attributes attributes)
             : base(
                   qualifiedName,
                   projectDeclaration,
-                  projectDeclaration,
                   name,
-                  null,
-                  false,
-                  false,
-                  Accessibility.Public,
                   DeclarationType.ProceduralModule,
-                  null,
-                  Selection.Home,
-                  false,
-                  null,
-                  isBuiltIn,
+                  isUserDefined,
                   annotations,
-                  attributes) { }
+                  attributes)
+        { }
 
-        public ProceduralModuleDeclaration(ComModule statics, Declaration parent, QualifiedModuleName module,
+        public ProceduralModuleDeclaration(
+            ComModule statics, 
+            Declaration parent, 
+            QualifiedModuleName module,
             Attributes attributes)
             : this(
                 module.QualifyMemberName(statics.Name),
                 parent,
                 statics.Name,
-                true,
-                new List<IAnnotation>(),
+                false,
+                new List<IParseTreeAnnotation>(),
                 attributes)
         {
             IsPrivateModule = statics.IsRestricted;
@@ -49,20 +43,20 @@ namespace Rubberduck.Parsing.Symbols
         //These are the pseudo-module ctor for COM enumerations and types.
         public ProceduralModuleDeclaration(ComEnumeration pseudo, Declaration parent, QualifiedModuleName module)
             : this(
-                module.QualifyMemberName(pseudo.Name),
+                module.QualifyMemberName($"_{pseudo.Name}"),
                 parent,
-                pseudo.Name,
-                true,
-                new List<IAnnotation>(),
+                $"_{pseudo.Name}",
+                false,
+                new List<IParseTreeAnnotation>(),
                 new Attributes()) { }
 
         public ProceduralModuleDeclaration(ComStruct pseudo, Declaration parent, QualifiedModuleName module)
             : this(
-                module.QualifyMemberName(pseudo.Name),
+                module.QualifyMemberName($"_{pseudo.Name}"),
                 parent,
-                pseudo.Name,
-                true,
-                new List<IAnnotation>(),
+                $"_{pseudo.Name}",
+                false,
+                new List<IParseTreeAnnotation>(),
                 new Attributes()) { }
 
         public bool IsPrivateModule { get; internal set; }

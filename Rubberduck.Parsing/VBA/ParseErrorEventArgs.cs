@@ -1,33 +1,30 @@
 ﻿using System;
-using Rubberduck.Parsing.Symbols;
+using Rubberduck.Parsing.VBA.Parsing.ParsingExceptions;
 using Rubberduck.VBEditor;
-using Rubberduck.VBEditor.SafeComWrappers.Abstract;
+using Rubberduck.VBEditor.Utility;
 
 namespace Rubberduck.Parsing.VBA
 {
     public class ParseErrorEventArgs : EventArgs
     {
-        public ParseErrorEventArgs(SyntaxErrorException exception, IVBComponent component)
+        private readonly QualifiedModuleName _moduleName;
+
+        public ParseErrorEventArgs(SyntaxErrorException exception, QualifiedModuleName moduleName)
         {
-            _exception = exception;
-            _component = component;
+            Exception = exception;
+            _moduleName = moduleName;
         }
 
-        private readonly SyntaxErrorException _exception;
-        public SyntaxErrorException Exception { get { return _exception; } }
+        public SyntaxErrorException Exception { get; }
 
-        private readonly IVBComponent _component;
-        public string ComponentName { get { return _component.Name; } }
-        public string ProjectName { get { return _component.Collection.Parent.Name; } }
+        public string ComponentName => _moduleName.ComponentName;
+        public string ProjectName => _moduleName.ProjectName;
 
-        public void Navigate()
+        //TODO: Move this to the user of the arguments. Event arguments should be pure data.
+        public void Navigate(ISelectionService selectionService)
         {
-            var selection = new Selection(_exception.LineNumber, _exception.Position, _exception.LineNumber, _exception.Position + _exception.OffendingSymbol.Text.Length - 1);
-            var module = _component.CodeModule;
-            var pane = module.CodePane;
-            {
-                pane.Selection = selection;
-            }
+            var selection = new Selection(Exception.LineNumber, Exception.Position, Exception.LineNumber, Exception.Position + Exception.OffendingSymbol.Text.Length - 1);
+            selectionService.TrySetActiveSelection(_moduleName, selection);
         }
     }
 }

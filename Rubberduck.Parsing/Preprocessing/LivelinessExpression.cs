@@ -1,59 +1,52 @@
-﻿using System;
-using System.Linq;
+﻿using Antlr4.Runtime;
+using System.Collections.Generic;
 
-namespace Rubberduck.Parsing.Preprocessing
+namespace Rubberduck.Parsing.PreProcessing
 {
     public sealed class LivelinessExpression : Expression
     {
         private readonly IExpression _isAlive;
-        private readonly IExpression _code;
+        private readonly IExpression _tokens;
 
-        public LivelinessExpression(IExpression isAlive, IExpression code)
+        public LivelinessExpression(IExpression isAlive, IExpression tokens)
         {
             _isAlive = isAlive;
-            _code = code;
+            _tokens = tokens;
         }
 
         public override IValue Evaluate()
         {
-            bool isAlive = _isAlive.Evaluate().AsBool;
-            var code = _code.Evaluate().AsString;
-            if (isAlive)
+            var isAlive = _isAlive.Evaluate().AsBool;
+            var tokens = _tokens.Evaluate().AsTokens;
+            if (!isAlive)
             {
-                return new StringValue(code);
+                HideDeadTokens(tokens);
             }
-            else
+            return new TokensValue(tokens);
+        }
+
+        private void HideDeadTokens(IEnumerable<IToken> deadTokens)
+        {
+            CommonToken commonToken;
+            foreach(var token in deadTokens)
             {
-                return new StringValue(MarkAsDead(code));
+                //We need this cast because the IToken interface does not expose the setters for the properties.
+                //CommonToken is the default token type used by Antlr. (Any custom token types should extend it.)
+                commonToken = token as CommonToken;
+                if (commonToken != null)
+                {
+                    HideNonNewline(commonToken);
+                }
             }
         }
 
-        private string MarkAsDead(string code)
+        private void HideNonNewline(CommonToken token)
         {
-            bool hasNewLine = false;
-            if (code.EndsWith(Environment.NewLine))
+            //We do not remove the newlines or line continuations to keep physical and logical line counts intact.
+            if (token.Type != Grammar.VBALexer.NEWLINE && token.Type != Grammar.VBALexer.LINE_CONTINUATION)
             {
-                hasNewLine = true;
+                token.Channel = TokenConstants.HiddenChannel;
             }
-            // Remove parsed new line.
-            code = code.TrimEnd('\r', '\n');
-            var lines = code.Split(new string[] { Environment.NewLine }, StringSplitOptions.None);
-            var result = string.Join(Environment.NewLine, lines.Select(_ => string.Empty));
-            if (hasNewLine)
-            {
-                result += Environment.NewLine;
-            }
-            return result;
-        }
-
-        private string MarkLineAsDead(string line)
-        {
-            var result = string.Empty;
-            if (line.EndsWith(Environment.NewLine))
-            {
-                result += Environment.NewLine;
-            }
-            return result;
         }
     }
 }

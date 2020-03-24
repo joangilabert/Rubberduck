@@ -1,15 +1,15 @@
-﻿using System.Linq;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.Linq;
+using NUnit.Framework;
 using Rubberduck.SmartIndenter;
 using RubberduckTests.Settings;
 
 namespace RubberduckTests.SmartIndenter
 {
-    [TestClass]
+    [TestFixture]
     public class MultiSegmentLineTests
     {
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void SingleLineFunctionsNotIndented()
         {
             var code = new[]
@@ -18,13 +18,18 @@ namespace RubberduckTests.SmartIndenter
                 "Private Sub Bar(): Debug.Assert Foo = 42: End Sub"
             };
 
-            var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
-            var actual = indenter.Indent(code, string.Empty);
+            var indenter = new Indenter(null, () =>
+            {
+                var s = IndenterSettingsTests.GetMockIndenterSettings();
+                s.VerticallySpaceProcedures = false;
+                return s;
+            });
+            var actual = indenter.Indent(code);
             Assert.IsTrue(code.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void SingleLineEnumsNotIndented()
         {
             var code = new[]
@@ -33,13 +38,18 @@ namespace RubberduckTests.SmartIndenter
                 "Public Enum Bar: X = 1: Y = 2: End Enum"
             };
 
-            var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
-            var actual = indenter.Indent(code, string.Empty);
+            var indenter = new Indenter(null, () =>
+            {
+                var s = IndenterSettingsTests.GetMockIndenterSettings();
+                s.VerticallySpaceProcedures = false;
+                return s;
+            });
+            var actual = indenter.Indent(code);
             Assert.IsTrue(code.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void SingleLineTypesNotIndented()
         {
             var code = new[]
@@ -48,13 +58,18 @@ namespace RubberduckTests.SmartIndenter
                 "Public Enum Bar: X = 1: Y = 2: End Enum"
             };
 
-            var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
-            var actual = indenter.Indent(code, string.Empty);
+            var indenter = new Indenter(null, () =>
+            {
+                var s = IndenterSettingsTests.GetMockIndenterSettings();
+                s.VerticallySpaceProcedures = false;
+                return s;
+            });
+            var actual = indenter.Indent(code);
             Assert.IsTrue(code.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void UnmatchedEnumsNotIndent()
         {
             var code = new[]
@@ -64,12 +79,12 @@ namespace RubberduckTests.SmartIndenter
             };
 
             var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(code.SequenceEqual(actual));
         }
 
-        [TestMethod]        // Broken in VB6 SmartIndenter.
-        [TestCategory("Indenter")]
+        [Test]        // Broken in VB6 SmartIndenter.
+        [Category("Indenter")]
         public void IfThenElseOnSameLineWorks()
         {
             var code = new[]
@@ -91,12 +106,12 @@ namespace RubberduckTests.SmartIndenter
             };
 
             var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void MixedSelectSyntaxWorks()
         {
             var code = new[]
@@ -127,12 +142,12 @@ namespace RubberduckTests.SmartIndenter
                 s.IndentCase = true;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void UnfinishedCaseOnNextLineWorks()
         {
             var code = new[]
@@ -161,7 +176,7 @@ namespace RubberduckTests.SmartIndenter
                 s.IndentCase = true;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
     }

@@ -1,15 +1,15 @@
-﻿using System.Linq;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.Linq;
+using NUnit.Framework;
 using Rubberduck.SmartIndenter;
 using RubberduckTests.Settings;
 
 namespace RubberduckTests.SmartIndenter
 {
-    [TestClass]
+    [TestFixture]
     public class LineContinuationTests
     {
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void DeclarationLineAlignsCorrectly()
         {
             var code = new[]
@@ -25,12 +25,12 @@ namespace RubberduckTests.SmartIndenter
             };
 
             var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void FunctionParametersAlignCorrectly()
         {
             var code = new[]
@@ -46,12 +46,12 @@ namespace RubberduckTests.SmartIndenter
             };
 
             var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void NamedParametersAlignCorrectly()
         {
             var code = new[]
@@ -71,12 +71,12 @@ namespace RubberduckTests.SmartIndenter
             };
 
             var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void IgnoreOperatorsInContinuationsOnWorks()
         {
             var code = new[]
@@ -103,12 +103,12 @@ namespace RubberduckTests.SmartIndenter
                 s.IgnoreOperatorsInContinuations = true;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void IgnoreOperatorsInContinuationsOffWorks()
         {
             var code = new[]
@@ -135,12 +135,12 @@ namespace RubberduckTests.SmartIndenter
                 s.IgnoreOperatorsInContinuations = false;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void IfThenDoesntGetMangled()
         {
             var code = new[]
@@ -162,12 +162,12 @@ namespace RubberduckTests.SmartIndenter
             };
 
             var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void MultilineCommentAlignsCorrectly()
         {
             var code = new[]
@@ -189,12 +189,12 @@ namespace RubberduckTests.SmartIndenter
             };
 
             var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void ContinuedEndOfLineCommentAligned()
         {
             var code = new[]
@@ -220,13 +220,13 @@ namespace RubberduckTests.SmartIndenter
                 s.EndOfLineCommentColumnSpaceAlignment = 50;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
         //https://github.com/rubberduck-vba/Rubberduck/issues/1291 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void CommentsWithLineContinuationsWork()
         {
             var code = new[]
@@ -239,12 +239,12 @@ namespace RubberduckTests.SmartIndenter
             };
 
             var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(code.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void RemsWithLineContinuationsWork()
         {
             var code = new[]
@@ -257,12 +257,12 @@ namespace RubberduckTests.SmartIndenter
             };
 
             var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(code.SequenceEqual(actual));
         }
 
-        [TestMethod]        // Broken in VB6 SmartIndenter.
-        [TestCategory("Indenter")]
+        [Test]        // Broken in VB6 SmartIndenter.
+        [Category("Indenter")]
         public void DoWhileOnTwoLinesWorks()
         {
             var code = new[]
@@ -284,12 +284,12 @@ namespace RubberduckTests.SmartIndenter
             };
 
             var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]        // Broken in VB6 SmartIndenter.
-        [TestCategory("Indenter")]
+        [Test]        // Broken in VB6 SmartIndenter.
+        [Category("Indenter")]
         public void ContinuedIfThenWorks()
         {
             var code = new[]
@@ -315,12 +315,12 @@ namespace RubberduckTests.SmartIndenter
             };
 
             var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void MultipleFunctionCallsWorks()
         {
             var code = new[]
@@ -335,7 +335,7 @@ namespace RubberduckTests.SmartIndenter
             {
                 "Private Function Foo()",
                 "    Foo = Bar(A, B, C + 1) = D * Baz(E, F, G) / (4 * X * Y) * Bar(A + 1, B + 1, C) _",
-                "          + (D * (Bar(E, F, G) / D ^ 2 + Baz(X, Y, Z) / (2 * X)))",
+                "        + (D * (Bar(E, F, G) / D ^ 2 + Baz(X, Y, Z) / (2 * X)))",
                 "End Function"
             };
 
@@ -345,12 +345,99 @@ namespace RubberduckTests.SmartIndenter
                 s.IgnoreOperatorsInContinuations = false;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
+        public void MultiLineFunctionCallsWorksWithSubFunctionCall()
+        {
+            var code = new[]
+            {
+                "Sub Foo()",
+                "Dim bar As Long",
+                "bar = Baz(Param:=AnotherFunction(Title:=\"foobar\"), _",
+                "Behavior:=\"expected\", _",
+                "Works:=True)",
+                "End Sub"
+            };
+
+            var expected = new[]
+            {
+                "Sub Foo()",
+                "    Dim bar As Long",
+                "    bar = Baz(Param:=AnotherFunction(Title:=\"foobar\"), _",
+                "              Behavior:=\"expected\", _",
+                "              Works:=True)",
+                "End Sub"
+            };
+
+            var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
+            var actual = indenter.Indent(code);
+            Assert.IsTrue(expected.SequenceEqual(actual));
+        }
+
+        [Test]
+        [Category("Indenter")]
+        public void MultiLineFunctionCallsWorksWithSubFunctionCallUnderScoreInParam()
+        {
+            var code = new[]
+            {
+                "Sub Foo()",
+                "Dim bar As Long",
+                "bar = Baz(Param:=AnotherFunction(Title:=FOO_BAR), _",
+                "Behavior:=\"expected\", _",
+                "Works:=True)",
+                "End Sub"
+            };
+
+            var expected = new[]
+            {
+                "Sub Foo()",
+                "    Dim bar As Long",
+                "    bar = Baz(Param:=AnotherFunction(Title:=FOO_BAR), _",
+                "              Behavior:=\"expected\", _",
+                "              Works:=True)",
+                "End Sub"
+            };
+
+            var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
+            var actual = indenter.Indent(code);
+            Assert.IsTrue(expected.SequenceEqual(actual));
+        }
+
+        [Test]
+        [Category("Indenter")]
+        public void MultiLineFunctionCallsWorksWithSubFunctionCallUnderScoreInParamString()
+        {
+            var code = new[]
+            {
+                "Sub Foo()",
+                "Dim bar As Long",
+                "bar = Baz(Param:=AnotherFunction(Title:=\"foo_bar\"), _",
+                "Behavior:=\"expected\", _",
+                "Works:=True)",
+                "End Sub"
+            };
+
+            var expected = new[]
+            {
+                "Sub Foo()",
+                "    Dim bar As Long",
+                "    bar = Baz(Param:=AnotherFunction(Title:=\"foo_bar\"), _",
+                "              Behavior:=\"expected\", _",
+                "              Works:=True)",
+                "End Sub"
+            };
+
+            var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
+            var actual = indenter.Indent(code);
+            Assert.IsTrue(expected.SequenceEqual(actual));
+        }
+
+        [Test]
+        [Category("Indenter")]
         public void UncontinuedNestedFunctionWorks()
         {
             var code = new[]
@@ -370,12 +457,12 @@ namespace RubberduckTests.SmartIndenter
             };
 
             var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void ContinuedNestedFunctionWorks()
         {
             var code = new[]
@@ -395,12 +482,12 @@ namespace RubberduckTests.SmartIndenter
             };
 
             var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void MultiLineContinuedFunctionWorks()
         {
             var code = new[]
@@ -422,13 +509,13 @@ namespace RubberduckTests.SmartIndenter
             };
 
             var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
         //https://github.com/rubberduck-vba/Rubberduck/issues/1287
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void ContinuationsInTypeDeclarationsWorks()
         {
             var code = new[]
@@ -479,13 +566,13 @@ namespace RubberduckTests.SmartIndenter
                 s.AlignCommentsWithCode = true;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
         //https://github.com/rubberduck-vba/Rubberduck/issues/1287
-        [TestMethod]        // Broken in VB6 SmartIndenter.
-        [TestCategory("Indenter")]
+        [Test]        // Broken in VB6 SmartIndenter.
+        [Category("Indenter")]
         public void ContinuationsInProcedureDeclarationsWorks()
         {
             var code = new[]
@@ -538,13 +625,13 @@ namespace RubberduckTests.SmartIndenter
                 s.IndentFirstDeclarationBlock = true;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
         //https://github.com/rubberduck-vba/Rubberduck/issues/2407
-        [TestMethod] 
-        [TestCategory("Indenter")]
+        [Test] 
+        [Category("Indenter")]
         public void ContinuationsInProcedureDeclarationsWithAlignWorks()
         {
             var code = new[]
@@ -571,13 +658,13 @@ namespace RubberduckTests.SmartIndenter
                 s.AlignDimColumn = 15;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
         //https://github.com/rubberduck-vba/Rubberduck/issues/2407
-        [TestMethod] 
-        [TestCategory("Indenter")]
+        [Test] 
+        [Category("Indenter")]
         public void ContinuationsInProcedureDeclarationsWithAlignWorksBareType()
         {
             var code = new[]
@@ -620,12 +707,12 @@ namespace RubberduckTests.SmartIndenter
                 s.AlignDimColumn = 15;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void ContinuationWithOnlyCommentWorks()
         {
             var code = new[]
@@ -651,13 +738,13 @@ namespace RubberduckTests.SmartIndenter
                 s.IndentFirstDeclarationBlock = true;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
         //https://github.com/rubberduck-vba/Rubberduck/issues/1287
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void TrailingMultiLineCommentFirstWorks()
         {
             var code = new[]
@@ -691,13 +778,13 @@ namespace RubberduckTests.SmartIndenter
             };
 
             var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
         //https://github.com/rubberduck-vba/Rubberduck/issues/1287
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void TrailingMultiLineCommentSecondWorks()
         {
             var code = new[]
@@ -731,13 +818,13 @@ namespace RubberduckTests.SmartIndenter
             };
 
             var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
         //https://github.com/rubberduck-vba/Rubberduck/issues/1287
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void TrailingMultiLineCommentFirstNoAlignWorks()
         {
             var code = new[]
@@ -776,13 +863,13 @@ namespace RubberduckTests.SmartIndenter
                 s.AlignContinuations = false;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
         //https://github.com/rubberduck-vba/Rubberduck/issues/1287
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void TrailingMultiLineCommentSecondNoAlignWorks()
         {
             var code = new[]
@@ -821,13 +908,13 @@ namespace RubberduckTests.SmartIndenter
                 s.AlignContinuations = false;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
         //https://github.com/rubberduck-vba/Rubberduck/issues/2402
-        [TestMethod]        // Broken in VB6 SmartIndenter.
-        [TestCategory("Indenter")]
+        [Test]        // Broken in VB6 SmartIndenter.
+        [Category("Indenter")]
         public void SplitNamedParameterAlignsCorrectly()
         {
             var code = new[]
@@ -847,13 +934,13 @@ namespace RubberduckTests.SmartIndenter
             };
 
             var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
         //https://github.com/rubberduck-vba/Rubberduck/issues/2402
-        [TestMethod]        // Broken in VB6 SmartIndenter.
-        [TestCategory("Indenter")]
+        [Test]        // Broken in VB6 SmartIndenter.
+        [Category("Indenter")]
         public void MultipleSplitNamedParametersAlignCorrectly()
         {
             var code = new[]
@@ -875,7 +962,7 @@ namespace RubberduckTests.SmartIndenter
             };
 
             var indenter = new Indenter(null, () => IndenterSettingsTests.GetMockIndenterSettings());
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
     }

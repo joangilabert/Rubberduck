@@ -1,206 +1,252 @@
+using Moq;
+using NUnit.Framework;
+using Rubberduck.Resources.UnitTesting;
+using Rubberduck.UnitTesting;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using Rubberduck.Parsing.VBA;
+
 namespace RubberduckTests.UnitTesting
 {
-    //[TestClass]
-    //public class EngineTests
-    //{
-    //    private TestEngine _engine;
-    //    private Mock<IHostApplication> _hostAppMock;
-    //    private readonly QualifiedModuleName _moduleName = new QualifiedModuleName("VBAProject", "TestModule1");
+    // FIXME - These commented tests need to be restored after TestEngine refactor.
+    [NonParallelizable]
+    [TestFixture, Apartment(ApartmentState.STA)]  
+    public class EngineTests
+    {
+        [Test]
+        [TestCase(1)]
+        [TestCase(2)]
+        [TestCase(3)]
+        [Category("Unit Testing")]
+        public void TestEngine_ExposesTestMethods_AndRaisesRefresh(int testCount)
+        {
+            using (var engine = new MockedTestEngine(testCount))
+            {
+                var started = 0;
+                var refreshes = 0;
 
-    //    private TestMethod _successfulMethod;
-    //    private TestMethod _failedMethod;
-    //    private TestMethod _inconclusiveMethod;
-    //    private TestMethod _notRunMethod;
+                engine.TestEngine.TestsRefreshStarted += (sender, args) => started++;
+                engine.TestEngine.TestsRefreshed += (sender, args) => refreshes++;
+                engine.ParserState.OnParseRequested(engine);
 
-    //    private bool _wasEventRaised;
-    //    private int _eventCount;
+                if (engine.ParserState.Status != ParserState.Ready)
+                {
+                    Assert.Inconclusive("Parser Error");
+                }
 
-    //    [TestInitialize]
-    //    public void Initialize()
-    //    {
-    //        _wasEventRaised = false;
-    //        _eventCount = 0;
+                Assert.AreEqual(1, started);
+                Assert.AreEqual(1, refreshes);
+                Assert.AreEqual(testCount, engine.TestEngine.Tests.Count());
+            }
+        }
 
-    //        _engine = new TestEngine();
-    //        _hostAppMock = new Mock<IHostApplication>();
+        [Test]
+        [Category("Unit Testing")]
+        public void TestEngine_RaisesRefreshEvent_EveryParserRun()
+        {
+            const int parserRuns = 5;
 
-    //        _successfulMethod = new TestMethod(new QualifiedMemberName(_moduleName, "TestMethod1"), _hostAppMock.Object);
-    //        _failedMethod = new TestMethod(new QualifiedMemberName(_moduleName, "TestMethod2"), _hostAppMock.Object);
-    //        _inconclusiveMethod = new TestMethod(new QualifiedMemberName(_moduleName, "TestMethod3"), _hostAppMock.Object);
-    //        _notRunMethod = new TestMethod(new QualifiedMemberName(_moduleName, "TestMethod4"), _hostAppMock.Object);
+            using (var engine = new MockedTestEngine(MockedTestEngine.GetTestMethod(1)))
+            {
+                var refreshCount = 0;
+                engine.TestEngine.TestsRefreshed += (sender, args) => refreshCount++;
 
-    //        var tests = new Dictionary<TestMethod, TestResult>
-    //        {
-    //            {_successfulMethod, new TestResult(TestOutcome.Succeeded)},
-    //            {_failedMethod, new TestResult(TestOutcome.Failed)},
-    //            {_inconclusiveMethod, new TestResult(TestOutcome.Inconclusive)},
-    //            {_notRunMethod, null}
-    //        };
+                for (var parse = 1; parse <= parserRuns; parse++)
+                {
+                    engine.ParserState.OnParseRequested(engine);
 
-    //        _engine.AllTests = tests;
-    //    }
+                    if (engine.ParserState.Status != ParserState.Ready)
+                    {
+                        Assert.Inconclusive("Parser Error");
+                    }
 
-    //    [TestMethod]
-    //    public void TestEngine_FailedTests()
-    //    {
-    //        var actual = _engine.FailedTests().First();
+                    Assert.AreEqual(parse, refreshCount);
+                    Assert.AreEqual(1, engine.TestEngine.Tests.Count());
+                }
+            }
+        }
 
-    //        Assert.AreEqual(_failedMethod, actual);
-    //    }
+        [Test]
+        [Category("Unit Testing")]
+        public void TestEngine_Raises_TestRunStarted()
+        {
+            SetupAndTestStatusEvent((engine, events) => engine.TestRunStarted += (source, args) => events.Add(args));
+        }
 
-    //    [TestMethod]
-    //    public void TestEngine_SuccessfulTests()
-    //    {
-    //        var actual = _engine.PassedTests().First();
+        [Test]
+        [Category("Unit Testing")]
+        public void TestEngine_Raises_TestStarted()
+        {
+            SetupAndTestStatusEvent((engine, events) => engine.TestStarted += (source, args) => events.Add(args));
+        }
 
-    //        Assert.AreEqual(_successfulMethod, actual);
-    //    }
+        [Test]
+        [Category("Unit Testing")]
+        public void TestEngine_Raises_TestCompleted()
+        {
+            SetupAndTestStatusEvent((engine, events) => engine.TestCompleted += (source, args) => events.Add(args));
+        }
 
-    //    [TestMethod]
-    //    public void TestEngine_NotRunTests()
-    //    {
-    //        var actual = _engine.NotRunTests().First();
+        [Test]
+        [Category("Unit Testing")]
+        public void TestEngine_Raises_TestRunCompleted()
+        {
+            SetupAndTestStatusEvent((engine, events) => engine.TestRunCompleted += (source, args) => events.Add(args));
+        }
 
-    //        Assert.AreEqual(_notRunMethod, actual);
-    //    }
+        private void SetupAndTestStatusEvent(Action<ITestEngine, List<EventArgs>> configuration)
+        {
+            using (var engine = new MockedTestEngine(MockedTestEngine.GetTestMethod(1)))
+            {
+                var completionEvents = new List<EventArgs>();
 
-    //    [TestMethod]
-    //    public void TestEngine_LastRunTests_ReturnsAllRunTests()
-    //    {
-    //        var actual = _engine.LastRunTests().ToList();
-    //        var expected = new List<TestMethod>()
-    //        {
-    //            _failedMethod, _inconclusiveMethod, _successfulMethod
-    //        };
+                configuration.Invoke(engine.TestEngine, completionEvents);
+                engine.ParserState.OnParseRequested(engine);
 
-    //        CollectionAssert.AreEquivalent(expected, actual);
-    //    }
+                if (engine.ParserState.Status != ParserState.Ready)
+                {
+                    Assert.Inconclusive("Parser Error");
+                }
 
-    //    [TestMethod]
-    //    public void TestEngine_LastRunTests_Successful()
-    //    {
-    //        var actual = _engine.LastRunTests(TestOutcome.Succeeded).First();
+                engine.TestEngine.Run(engine.TestEngine.Tests);
 
-    //        Assert.AreEqual(_successfulMethod, actual);
-    //    }
+                Mock.Verify(engine.Dispatcher, engine.VbeInteraction, engine.WrapperProvider);
+                Assert.AreEqual(1, completionEvents.Count);
+            }
+        }
 
-    //    [TestMethod]
-    //    public void TestEngine_LastRunTests_Failed()
-    //    {
-    //        var actual = _engine.LastRunTests(TestOutcome.Failed).First();
+        [Test]
+        [Category("Unit Testing")]
+        public void TestEngine_RunsAssert_ReturnsSucceeded()
+        {
+            var expected = new TestResult(TestOutcome.Succeeded);
+            SetupAndTestAssertAndReturn(AssertHandler.OnAssertSucceeded, expected);
+        }
 
-    //        Assert.AreEqual(_failedMethod, actual);
-    //    }
+        [Test]
+        [Category("Unit Testing")]
+        public void TestEngine_RunsAssert_ReturnsInconclusive()
+        {
+            var expected = new TestResult(TestOutcome.Inconclusive, "Test Message");
+            SetupAndTestAssertAndReturn(() => AssertHandler.OnAssertInconclusive("Test Message"), expected);
+        }
 
-    //    [TestMethod]
-    //    public void TestEngine_LastRunTests_Inconclusive()
-    //    {
-    //        var actual = _engine.LastRunTests(TestOutcome.Inconclusive).First();
+        [Test]
+        [Category("Unit Testing")]
+        public void TestEngine_RunsAssert_ReturnsFailed()
+        {
+            var expected = new TestResult(TestOutcome.Failed, string.Format(AssertMessages.Assert_FailedMessageFormat, "TestMethod1", "Test Message"));
+            // ReSharper disable once ExplicitCallerInfoArgument - there is no "caller".
+            SetupAndTestAssertAndReturn(() => AssertHandler.OnAssertFailed("Test Message", "TestMethod1"), expected);
+        }
 
-    //        Assert.AreEqual(_inconclusiveMethod, actual);
-    //    }
+        private void SetupAndTestAssertAndReturn(Action action, TestResult expected)
+        {
+            using (var engine = new MockedTestEngine(MockedTestEngine.GetTestMethod(1)))
+            {
+                var completionEvents = new List<TestCompletedEventArgs>();
 
-    //    [TestMethod]
-    //    public void TestEngine_Run_ModuleIntialize_IsRunOnce()
-    //    {
-    //        //arrange
-    //        _engine.ModuleInitialize += CatchEvent;
+                engine.SetupAssertCompleted(action);
+                engine.TestEngine.TestCompleted += (source, args) => completionEvents.Add(args);
+                engine.ParserState.OnParseRequested(engine);
 
-    //        var tests = _engine.AllTests.Keys;
+                if (engine.ParserState.Status != ParserState.Ready)
+                {
+                    Assert.Inconclusive("Parser Error");
+                }
 
-    //        //act
-    //        _engine.Run(tests);
+                engine.TestEngine.Run(engine.TestEngine.Tests);
+                Thread.SpinWait(25);
 
-    //        Assert.IsTrue(_wasEventRaised, "Module Intialize was not run.");
-    //        Assert.AreEqual(1, _eventCount, "Module Intialzie expected to be run once.");
-    //    }
+                Mock.Verify(engine.Dispatcher, engine.VbeInteraction, engine.WrapperProvider, engine.TypeLib);
+                Assert.AreEqual(1, completionEvents.Count);
+                Assert.AreEqual(expected, completionEvents.First().Result);
+            }
+        }
 
-    //    [TestMethod]
-    //    public void TestEngine_Run_ModuleCleanup_IsRunOnce()
-    //    {
-    //        //arrange
-    //        _engine.ModuleCleanup += CatchEvent;
+        private static readonly Dictionary<TestOutcome, (TestOutcome Outcome, string Output, long Duration)> DummyOutcomes = new Dictionary<TestOutcome, (TestOutcome, string, long)>
+        {
+            { TestOutcome.Succeeded,  (TestOutcome.Succeeded, "", 0)  },
+            { TestOutcome.Inconclusive,  (TestOutcome.Inconclusive, "", 0)  },
+            { TestOutcome.Failed,  (TestOutcome.Failed, "", 0)  },
+            { TestOutcome.Ignored,  (TestOutcome.Ignored, "", 0)  }
+        };
 
-    //        //act
-    //        _engine.Run(_engine.AllTests.Keys);
+        //[Test]
+        //[NonParallelizable]
+        //[TestCase(new object[] { TestOutcome.Succeeded, TestOutcome.Failed })]
+        //[TestCase(new object[] { TestOutcome.Succeeded, TestOutcome.Succeeded, TestOutcome.Succeeded })]
+        //[TestCase(new object[] { TestOutcome.Succeeded, TestOutcome.Inconclusive, TestOutcome.Failed })]
+        //[TestCase(new object[] { TestOutcome.Inconclusive, TestOutcome.Inconclusive, TestOutcome.Inconclusive })]
+        //[TestCase(new object[] { TestOutcome.Failed, TestOutcome.Failed, TestOutcome.Failed })]
+        //[TestCase(new object[] { TestOutcome.Succeeded, TestOutcome.Ignored })]
+        //[TestCase(new object[] { TestOutcome.Ignored, TestOutcome.Ignored, TestOutcome.Ignored })]
+        //[Category("Unit Testing")]
+        //public void TestEngine_LastTestRun_UpdatesAfterRun(params TestOutcome[] tests)
+        //{
+        //    var underTest = tests.Select(test => DummyOutcomes[test]).ToList();
 
-    //        //assert
-    //        Assert.IsTrue(_wasEventRaised, "Module Cleanup was not run.");
-    //        Assert.AreEqual(1, _eventCount, "Module Cleanup expected to be run once.");
-    //    }
+        //    using (var engine = new MockedTestEngine(underTest))
+        //    {
+        //        engine.TestEngine.Run(engine.TestEngine.Tests);
+        //        Thread.SpinWait(25);
 
-    //    [TestMethod]
-    //    public void TestEngine_Run_MethodIntialize_IsRunForEachTestMethod()
-    //    {
-    //        //arrange
-    //        var expectedCount = _engine.AllTests.Count;
-    //        _engine.MethodInitialize += CatchEvent;
+        //        Assert.AreEqual(underTest.Count, engine.TestEngine.LastRunTests.Count);
+        //    }
+        //}
 
-    //        //act
-    //        _engine.Run(_engine.AllTests.Keys);
+        //[Test]
+        //[TestCase(new object[] { TestOutcome.Succeeded, TestOutcome.Failed })]
+        //[TestCase(new object[] { TestOutcome.Succeeded, TestOutcome.Succeeded, TestOutcome.Succeeded })]
+        //[TestCase(new object[] { TestOutcome.Succeeded, TestOutcome.Inconclusive, TestOutcome.Failed })]
+        //[TestCase(new object[] { TestOutcome.Inconclusive, TestOutcome.Inconclusive, TestOutcome.Inconclusive })]
+        //[TestCase(new object[] { TestOutcome.Failed, TestOutcome.Failed, TestOutcome.Failed })]
+        //[TestCase(new object[] { TestOutcome.Succeeded, TestOutcome.Ignored })]
+        //[TestCase(new object[] { TestOutcome.Ignored, TestOutcome.Ignored, TestOutcome.Ignored })]
+        //[Category("Unit Testing")]
+        //public void TestEngine_RunByOutcome_RunsAppropriateTests(params TestOutcome[] tests)
+        //{
+        //    var underTest = tests.Select(test => DummyOutcomes[test]).ToList();
 
-    //        //assert
-    //        Assert.IsTrue(_wasEventRaised, "Method Intialize was not run.");
-    //        Assert.AreEqual(expectedCount, _eventCount, "Method Intialized was expected to be run {0} times", expectedCount);
-    //    }
+        //    using (var engine = new MockedTestEngine(underTest))
+        //    {
+        //        engine.TestEngine.Run(engine.TestEngine.Tests);
 
-    //    [TestMethod]
-    //    public void TestEngine_Run_MethodCleanup_IsRunForEachTestMethod()
-    //    {
-    //        //arrange
-    //        var expectedCount = _engine.AllTests.Count;
-    //        _engine.MethodCleanup += CatchEvent;
+        //        var completionEvents = new List<EventArgs>();
+        //        engine.TestEngine.TestCompleted += (source, args) => completionEvents.Add(args);
 
-    //        //act
-    //        _engine.Run(_engine.AllTests.Keys);
+        //        var outcomes = Enum.GetValues(typeof(TestOutcome)).Cast<TestOutcome>().Where(outcome => outcome != TestOutcome.Unknown);
 
-    //        //assert
-    //        Assert.IsTrue(_wasEventRaised, "Method Initialize was not run.");
-    //        Assert.AreEqual(expectedCount, _eventCount, "Method Initialized was expected to be run {0} times", expectedCount);
-    //    }
+        //        foreach (var outcome in outcomes)
+        //        {
+        //            completionEvents.Clear();
+        //            engine.TestEngine.RunByOutcome(outcome);
 
-    //    [TestMethod]
-    //    public void TestEngine_Run_TestCompleteIsRaisedForEachTestMethod()
-    //    {
-    //        //arrange
-    //        var expectedCount = _engine.AllTests.Count;
-    //        _engine.TestCompleted += EngineOnTestComplete;
+        //            Thread.SpinWait(25);
 
-    //        //act
-    //        _engine.Run(_engine.AllTests.Keys);
+        //            var expected = tests.Count(result => result == outcome);
+        //            Assert.AreEqual(expected, completionEvents.Count);
 
-    //        //assert
-    //        Assert.IsTrue(_wasEventRaised, "TestCompleted event was not raised.");
-    //        Assert.AreEqual(expectedCount, _eventCount, "TestCompleted event was expected to be raised {0} times.", expectedCount);
-    //    }
+        //            if (expected == 0)
+        //            {
+        //                continue;
+        //            }
 
-    //    [TestMethod]
-    //    public void TestEngine_Run_WhenTestListIsEmpty_Bail()
-    //    {
-    //        //arrange 
-    //        _engine.MethodInitialize += CatchEvent;
+        //            var actual = new List<TestMethod>();
+        //            for (var index = 0; index < underTest.Count; index++)
+        //            {
+        //                if (tests[index] == outcome)
+        //                {
+        //                    actual.Add(engine.TestEngine.Tests.ElementAt(index));
+        //                }
+        //            }
 
-    //        //act
-    //        _engine.Run(new List<TestMethod>());
+        //            CollectionAssert.AreEqual(actual, engine.TestEngine.LastRunTests);
+        //        }
+        //    }
+        //}
 
-    //        //assert
-    //        Assert.IsFalse(_wasEventRaised, "No methods should run when passed an empty list of tests.");
-    //    }
-
-    //    private void EngineOnTestComplete(object sender, TestCompletedEventArgs testCompletedEventArgs)
-    //    {
-    //        CatchEvent();
-    //    }
-
-    //    private void CatchEvent(object sender, TestModuleEventArgs e)
-    //    {
-    //        CatchEvent();
-    //    }
-
-    //    private void CatchEvent()
-    //    {
-    //        _wasEventRaised = true;
-    //        _eventCount++;
-    //    }
-    //}
+    }
 }

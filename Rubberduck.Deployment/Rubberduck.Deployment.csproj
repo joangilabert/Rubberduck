@@ -1,0 +1,63 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Sunburst.NET.Sdk.WPF.Patched/1.0.49">
+  <PropertyGroup>
+    <Product>Rubberduck.Deployment</Product>
+    <Copyright>Copyright © 2018-2019</Copyright>
+    <ProjectGuid>{4B9BD3FE-DDC8-4842-BC3D-B8EF43011F0C}</ProjectGuid>
+    <RootNamespace>Rubberduck.Deployment</RootNamespace>
+    <AssemblyName>Rubberduck.Deployment</AssemblyName>
+    
+    <!-- Installer references depend on the unified output path -->
+    <UnifyOutputPath>true</UnifyOutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <NoWarn>1701;1702;;4011;1001;7035;1053;;4011;1001;7035;1053;1591</NoWarn>
+  </PropertyGroup>
+  <Import Project="..\RubberduckBaseProject.csproj" />
+
+  <ItemGroup>
+    <None Include="app.config" />
+    <None Include="Licenses\License.rtf" />
+    
+    <!-- EasyHook nuget may be not be within the solution so we need to check different places. The PreserveNewest should hopefully avoid repetitive (but harmless) copying -->
+    <Content Include="..\packages\EasyHook.2.7.6684\content\net40\**" CopyToPublishDirectory="PreserveNewest" Link="%(Filename)%(Extension)" />
+    <Content Include="$(USERPROFILE)\.nuget\packages\easyHook\2.7.6684\content\net40\**" CopyToPublishDirectory="PreserveNewest" Link="%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Rubberduck.Core\Rubberduck.Core.csproj" />
+    <ProjectReference Include="..\Rubberduck.Main\Rubberduck.Main.csproj" />
+    <ProjectReference Include="..\Rubberduck.Parsing\Rubberduck.Parsing.csproj" />
+    <ProjectReference Include="..\Rubberduck.RegexAssistant\Rubberduck.RegexAssistant.csproj" />
+    <ProjectReference Include="..\Rubberduck.SettingsProvider\Rubberduck.SettingsProvider.csproj" />
+    <ProjectReference Include="..\Rubberduck.SmartIndenter\Rubberduck.SmartIndenter.csproj" />
+    <ProjectReference Include="..\Rubberduck.VBEEditor\Rubberduck.VBEditor.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="EasyHook" Version="2.7.6684">
+      <CopyToOutputDirectory>content/net40/*</CopyToOutputDirectory>
+    </PackageReference>
+  </ItemGroup>
+  
+  <UsingTask TaskName="RubberduckPreBuildTask" AssemblyFile="..\Rubberduck.Deployment.Build\bin\Rubberduck.Deployment.Build.dll" />
+  <UsingTask TaskName="RubberduckPostBuildTask" AssemblyFile="..\Rubberduck.Deployment.Build\bin\Rubberduck.Deployment.Build.dll" />
+  
+  <Target Name="CopyLinkedContentFiles" BeforeTargets="Build">
+    <Copy SourceFiles="%(Content.Identity)" DestinationFiles="$(OutputPath)\%(Content.Link)" SkipUnchangedFiles="true" OverwriteReadOnlyFiles="true" />
+  </Target>
+
+  <Target Name="PreBuildTask" BeforeTargets="PreBuildEvent">
+    <RubberduckPreBuildTask WorkingDir="$(ProjectDir)" OutputDir="$(TargetDir)" />
+
+    <Message Text="Ran Rubberduck prebuild task" Importance="normal" />
+  </Target>
+  <Target Name="PostBuildTask" AfterTargets="PostBuildEvent">
+    <GetFrameworkSdkPath>
+      <Output TaskParameter="Path" PropertyName="SdkPath" />
+    </GetFrameworkSdkPath>
+    <CreateProperty Value="$(ProjectDir)$(OutputPath)$(TargetFileName)">
+      <Output TaskParameter="Value" PropertyName="TargetAssembly" />
+    </CreateProperty>
+    <RubberduckPostBuildTask Config="$(ConfigurationName)" NetToolsDir="$(SdkPath)bin\NETFX 4.6.1 Tools\" WixToolsDir="$(ProjectDir)WixToolset\" SourceDir="$(TargetDir)" TargetDir="$(TargetDir)" ProjectDir="$(ProjectDir)" IncludeDir="$(ProjectDir)InnoSetup\Includes\" FilesToExtract="Rubberduck.dll" />
+    <Message Text="Ran Rubberduck postbuild task" Importance="normal" />
+  </Target>
+</Project>

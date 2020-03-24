@@ -2,7 +2,6 @@
 using Rubberduck.Parsing.Annotations;
 using Rubberduck.Parsing.ComReflection;
 using Rubberduck.Parsing.Grammar;
-using Rubberduck.Parsing.VBA;
 using Rubberduck.VBEditor;
 using System;
 using System.Collections.Concurrent;
@@ -19,33 +18,8 @@ namespace Rubberduck.Parsing.Symbols
     [DebuggerDisplay("({DeclarationType}) {Accessibility} {IdentifierName} As {AsTypeName} | {Selection}")]
     public class Declaration : IEquatable<Declaration>
     {
-        public static readonly string[] BaseTypes =
-        {
-                "BOOLEAN",
-                "BYTE",
-                "CURRENCY",
-                "DATE",
-                "DOUBLE",
-                "INTEGER",
-                "LONG",
-                "LONGLONG",
-                "LONGPTR",
-                "SINGLE",
-                "STRING",
-                "VARIANT",
-                "OBJECT",
-                "ANY"
-        };
-
-        public static readonly IDictionary<string, string> TypeHintToTypeName = new Dictionary<string, string>
-        {
-            { "%", Tokens.Integer },
-            { "&", Tokens.Long },
-            { "@", Tokens.Decimal },
-            { "!", Tokens.Single },
-            { "#", Tokens.Double },
-            { "$", Tokens.String }
-        };
+        public const int MaxModuleNameLength = 31;
+        public const int MaxMemberNameLength = 255;
 
         public Declaration(
             QualifiedMemberName qualifiedName,
@@ -58,17 +32,18 @@ namespace Rubberduck.Parsing.Symbols
             Accessibility accessibility,
             DeclarationType declarationType,
             ParserRuleContext context,
+            ParserRuleContext attributesPassContext,
             Selection selection,
             bool isArray,
             VBAParser.AsTypeClauseContext asTypeContext,
-            bool isBuiltIn = true,
-            IEnumerable<IAnnotation> annotations = null,
+            bool isUserDefined = true,
+            IEnumerable<IParseTreeAnnotation> annotations = null,
             Attributes attributes = null,
             bool undeclared = false)
             : this(
                 qualifiedName,
                 parentDeclaration,
-                parentScope == null ? null : parentScope.Scope,
+                parentScope?.Scope,
                 asTypeName,
                 typeHint,
                 isSelfAssigned,
@@ -76,15 +51,16 @@ namespace Rubberduck.Parsing.Symbols
                 accessibility,
                 declarationType,
                 context,
+                attributesPassContext,
                 selection,
                 isArray,
                 asTypeContext,
-                isBuiltIn,
+                isUserDefined,
                 annotations,
                 attributes)
         {
-            _parentScopeDeclaration = parentScope;
-            _undeclared = undeclared;
+            ParentScopeDeclaration = parentScope;
+            IsUndeclared = undeclared;
         }
 
         public Declaration(
@@ -99,8 +75,8 @@ namespace Rubberduck.Parsing.Symbols
             DeclarationType declarationType,
             bool isArray,
             VBAParser.AsTypeClauseContext asTypeContext,
-            bool isBuiltIn = true,
-            IEnumerable<IAnnotation> annotations = null,
+            bool isUserDefined = true,
+            IEnumerable<IParseTreeAnnotation> annotations = null,
             Attributes attributes = null)
             : this(
                   qualifiedName,
@@ -113,14 +89,14 @@ namespace Rubberduck.Parsing.Symbols
                   accessibility,
                   declarationType,
                   null,
+                  null,
                   Selection.Home,
                   isArray,
                   asTypeContext,
-                  isBuiltIn,
+                  isUserDefined,
                   annotations,
                   attributes)
-        {
-        }
+        { }
 
         public Declaration(
             QualifiedMemberName qualifiedName,
@@ -133,63 +109,66 @@ namespace Rubberduck.Parsing.Symbols
             Accessibility accessibility,
             DeclarationType declarationType,
             ParserRuleContext context,
+            ParserRuleContext attributesPassContext,
             Selection selection,
             bool isArray,
             VBAParser.AsTypeClauseContext asTypeContext,
-            bool isBuiltIn = false,
-            IEnumerable<IAnnotation> annotations = null,
+            bool isUserDefined = true,
+            IEnumerable<IParseTreeAnnotation> annotations = null,
             Attributes attributes = null)
         {
-            _qualifiedName = qualifiedName;
-            _parentDeclaration = parentDeclaration;
-            _parentScopeDeclaration = _parentDeclaration;
-            _parentScope = parentScope ?? string.Empty;
-            _identifierName = qualifiedName.MemberName;
-            _asTypeName = asTypeName;
-            _isSelfAssigned = isSelfAssigned;
-            _isWithEvents = isWithEvents;
-            _accessibility = accessibility;
-            _declarationType = declarationType;
-            _selection = selection;
+            QualifiedName = qualifiedName;            
+            ParentDeclaration = parentDeclaration;
+            ParentScopeDeclaration = ParentDeclaration;
+            ParentScope = parentScope ?? string.Empty;
+            IdentifierName = qualifiedName.MemberName;
+            AsTypeName = asTypeName;
+            IsSelfAssigned = isSelfAssigned;
+            IsWithEvents = isWithEvents;
+            Accessibility = accessibility;
+            DeclarationType = declarationType;
+            Selection = selection;
             Context = context;
-            _isBuiltIn = isBuiltIn;
+            AttributesPassContext = attributesPassContext;
+            IsUserDefined = isUserDefined;
             _annotations = annotations;
-            _attributes = attributes ?? new Attributes();
+            Attributes = attributes ?? new Attributes();
 
-            _projectId = _qualifiedName.QualifiedModuleName.ProjectId;
-            var projectDeclaration = Declaration.GetProjectParent(parentDeclaration);
+            ProjectId = QualifiedName.QualifiedModuleName.ProjectId;
+            var projectDeclaration = GetProjectParent(parentDeclaration);
             if (projectDeclaration != null)
             {
-                _projectName = projectDeclaration.IdentifierName;
+                ProjectName = projectDeclaration.IdentifierName;
             }
-            else if (_declarationType == DeclarationType.Project)
+            else if (DeclarationType == DeclarationType.Project)
             {
-                _projectName = _identifierName;
+                ProjectName = IdentifierName;
             }
 
-            _customFolder = FolderFromAnnotations();
-            _isArray = isArray;
-            _asTypeContext = asTypeContext;
-            _typeHint = typeHint;
+            IsArray = isArray;
+            AsTypeContext = asTypeContext;
+            TypeHint = typeHint;
         }
 
         public Declaration(ComEnumeration enumeration, Declaration parent, QualifiedModuleName module) : this(
-                module.QualifyMemberName(enumeration.Name),
-                parent,
-                parent,
-                "Long",     //Match the VBA default type declaration.  Technically these *can* be a LongLong on 64 bit systems, but would likely crash the VBE... 
-                null,
-                false,
-                false,
-                Accessibility.Global,
-                DeclarationType.Enumeration,
-                null,
-                Selection.Home,
-                false,
-                null,
-                true,
-                null,
-                new Attributes()) { }
+            module.QualifyMemberName(enumeration.Name),
+            parent,
+            parent,
+            "Long",
+            //Match the VBA default type declaration.  Technically these *can* be a LongLong on 64 bit systems, but would likely crash the VBE... 
+            null,
+            false,
+            false,
+            Accessibility.Global,
+            DeclarationType.Enumeration,
+            null,
+            null,
+            Selection.Home,
+            false,
+            null,
+            false,
+            null,
+            new Attributes()) { }
 
         public Declaration(ComStruct structure, Declaration parent, QualifiedModuleName module)
             : this(
@@ -203,10 +182,11 @@ namespace Rubberduck.Parsing.Symbols
                 Accessibility.Global,
                 DeclarationType.UserDefinedType,
                 null,
+                null,
                 Selection.Home,
                 false,
                 null,
-                true,
+                false,
                 null,
                 new Attributes()) { }
 
@@ -221,9 +201,13 @@ namespace Rubberduck.Parsing.Symbols
                 Accessibility.Global,
                 DeclarationType.EnumerationMember,
                 null,
+                null,
                 Selection.Home,
                 false,
-                null) { }
+                null,
+                false,
+                null,
+                new Attributes()) { }
 
         public Declaration(ComField field, Declaration parent, QualifiedModuleName module)
             : this(
@@ -237,28 +221,13 @@ namespace Rubberduck.Parsing.Symbols
                 Accessibility.Global,
                 field.Type,
                 null,
+                null,
                 Selection.Home,
                 false,
-                null) { }
-
-        private string FolderFromAnnotations()
-            {
-                var @namespace = Annotations.FirstOrDefault(annotation => annotation.AnnotationType == AnnotationType.Folder);
-                string result;
-                if (@namespace == null)
-                {
-                    result = _qualifiedName.QualifiedModuleName.Project == null
-                        ? _projectId
-                        : _qualifiedName.QualifiedModuleName.Project.Name;
-                }
-                else
-                {
-                    var value = ((FolderAnnotation)@namespace).FolderName;
-                    result = value;
-                }
-                return result;
-            }
-
+                null,
+                false,
+                null,
+                new Attributes()) { }
 
         public static Declaration GetModuleParent(Declaration declaration)
         {
@@ -266,7 +235,7 @@ namespace Rubberduck.Parsing.Symbols
             {
                 return null;
             }
-            if (declaration.DeclarationType == DeclarationType.ClassModule || declaration.DeclarationType == DeclarationType.ProceduralModule)
+            if (declaration.DeclarationType.HasFlag(DeclarationType.ClassModule) || declaration.DeclarationType == DeclarationType.ProceduralModule)
             {
                 return declaration;
             }
@@ -286,64 +255,30 @@ namespace Rubberduck.Parsing.Symbols
             return GetProjectParent(declaration.ParentDeclaration);
         }
 
-        private readonly bool _isArray;
-        public bool IsArray { get { return _isArray; } }
-        private readonly VBAParser.AsTypeClauseContext _asTypeContext;
-        public VBAParser.AsTypeClauseContext AsTypeContext { get { return _asTypeContext; } }
-        private readonly string _typeHint;
-        public string TypeHint { get { return _typeHint; } }
-        public bool HasTypeHint { get { return !string.IsNullOrWhiteSpace(_typeHint); } }
+        public bool IsArray { get; }
+        public VBAParser.AsTypeClauseContext AsTypeContext { get; }
+        public string TypeHint { get; }
+        public bool HasTypeHint => !string.IsNullOrWhiteSpace(TypeHint);
 
-        public bool IsTypeSpecified
-        {
-            get
-            {
-                return HasTypeHint || _asTypeContext != null;
-            }
-        }
+        public bool IsTypeSpecified => HasTypeHint || AsTypeContext != null;
 
-        private readonly bool _isBuiltIn;
-        public bool IsBuiltIn { get { return _isBuiltIn; } }
+        public bool IsUserDefined { get; }
 
-        private readonly Declaration _parentDeclaration;
-        public Declaration ParentDeclaration { get { return _parentDeclaration; } }
+        public Declaration ParentDeclaration { get; }
 
-        private readonly QualifiedMemberName _qualifiedName;
-        public QualifiedMemberName QualifiedName { get { return _qualifiedName; } }
+        public QualifiedMemberName QualifiedName { get; }
+        public QualifiedModuleName QualifiedModuleName => QualifiedName.QualifiedModuleName;
 
-        public ParserRuleContext Context { get; set; }
+        public ParserRuleContext Context { get; }
+        public ParserRuleContext AttributesPassContext { get; }
 
-        private ConcurrentBag<IdentifierReference> _references = new ConcurrentBag<IdentifierReference>();
-        public IEnumerable<IdentifierReference> References
-        {
-            get
-            {
-                return _references.Union(_memberCalls);
-            }
-            set
-            {
-                _references = new ConcurrentBag<IdentifierReference>(value);
-            }
-        }
+        private ConcurrentDictionary<IdentifierReference, int> _references = new ConcurrentDictionary<IdentifierReference, int>();
+        public IEnumerable<IdentifierReference> References => _references.Keys;
 
-        private ConcurrentBag<IdentifierReference> _memberCalls = new ConcurrentBag<IdentifierReference>();
-        public IEnumerable<IdentifierReference> MemberCalls
-        {
-            get
-            {
-                return _memberCalls.ToList();
-            }
-            set
-            {
-                _memberCalls = new ConcurrentBag<IdentifierReference>(value);
-            }
-        }
+        protected IEnumerable<IParseTreeAnnotation> _annotations;
+        public IEnumerable<IParseTreeAnnotation> Annotations => _annotations ?? new List<IParseTreeAnnotation>();
 
-        private readonly IEnumerable<IAnnotation> _annotations;
-        public IEnumerable<IAnnotation> Annotations { get { return _annotations ?? new List<IAnnotation>(); } }
-
-        private readonly Attributes _attributes;
-        public IReadOnlyDictionary<string, IEnumerable<string>> Attributes { get { return _attributes; } }
+        public Attributes Attributes { get; }
 
         /// <summary>
         /// Gets an attribute value that contains the docstring for a member.
@@ -352,31 +287,66 @@ namespace Rubberduck.Parsing.Symbols
         {
             get
             {
-                IEnumerable<string> value;
-                if (_attributes.TryGetValue("VB_Description", out value))
+                string literalDescription;
+
+                var memberAttribute = Attributes.SingleOrDefault(a => a.Name == $"{IdentifierName}.VB_Description");
+                if (memberAttribute != null)
                 {
-                    return value.Single();
+                    literalDescription = memberAttribute.Values.SingleOrDefault() ?? string.Empty;
+                    return CorrectlyFormatedDescription(literalDescription);
+                }
+
+                var moduleAttribute = Attributes.SingleOrDefault(a => a.Name == "VB_Description");
+                if (moduleAttribute != null)
+                {
+                    literalDescription = moduleAttribute.Values.SingleOrDefault() ?? string.Empty;
+                    return CorrectlyFormatedDescription(literalDescription);
                 }
 
                 return string.Empty;
             }
         }
 
+        private static string CorrectlyFormatedDescription(string literalDescription)
+        {
+            if (string.IsNullOrEmpty(literalDescription) 
+                || literalDescription.Length < 2 
+                || literalDescription[0] != '"'
+                || literalDescription[literalDescription.Length -1] != '"')
+            {
+                return literalDescription;
+            }
+
+            var text = literalDescription.Substring(1, literalDescription.Length - 2);
+            return text.Replace("\"\"", "\"");
+        }
+
+
         /// <summary>
         /// Gets an attribute value indicating whether a member is an enumerator provider.
         /// Types with such a member support For Each iteration.
         /// </summary>
-        public bool IsEnumeratorMember
+        public bool IsEnumeratorMember => Attributes.Any(a => a.Name.EndsWith("VB_UserMemId") && a.Values.Contains("-4"));
+
+        public virtual bool IsObject => !IsArray && IsObjectOrObjectArray;
+
+        public virtual bool IsObjectArray => IsArray && IsObjectOrObjectArray;
+
+        private bool IsObjectOrObjectArray
         {
             get
             {
-                IEnumerable<string> value;
-                if (_attributes.TryGetValue("VB_UserMemId", out value))
+                if (AsTypeName == Tokens.Object 
+                    || (AsTypeDeclaration?.DeclarationType.HasFlag(DeclarationType.ClassModule) ?? false))
                 {
-                    return value.Single() == "-4";
+                    return true;
                 }
 
-                return false;
+                var isIntrinsic = AsTypeIsBaseType
+                                  || (AsTypeDeclaration?.DeclarationType.HasFlag(DeclarationType.UserDefinedType) ?? false)
+                                  || (AsTypeDeclaration?.DeclarationType.HasFlag(DeclarationType.Enumeration) ?? false);
+
+                return !isIntrinsic;
             }
         }
 
@@ -388,64 +358,74 @@ namespace Rubberduck.Parsing.Symbols
             string identifier,
             Declaration callee,
             Selection selection,
-            IEnumerable<IAnnotation> annotations,
+            IEnumerable<IParseTreeAnnotation> annotations,
             bool isAssignmentTarget = false,
-            bool hasExplicitLetStatement = false)
+            bool hasExplicitLetStatement = false,
+            bool isSetAssigned = false,
+            bool isIndexedDefaultMemberAccess = false,
+            bool isNonIndexedDefaultMemberAccess = false,
+            int defaultMemberRecursionDepth = 0,
+            bool isArrayAccess = false,
+            bool isProcedureCoercion = false,
+            bool isInnerRecursiveDefaultMemberAccess = false
+            )
         {
-            _references.Add(
-                new IdentifierReference(
-                    module,
-                    scope,
-                    parent,
-                    identifier,
-                    selection,
-                    callSiteContext,
-                    callee,
-                    isAssignmentTarget,
-                    hasExplicitLetStatement,
-                    annotations));
-        }
-
-        public void AddMemberCall(IdentifierReference reference)
-        {
-            if (reference == null || reference.Declaration == null || reference.Declaration.Context == reference.Context)
+            var oldReference = _references.FirstOrDefault(r =>
+                r.Key.QualifiedModuleName == module &&
+                // ReSharper disable once PossibleUnintendedReferenceComparison
+                r.Key.ParentScoping == scope &&
+                // ReSharper disable once PossibleUnintendedReferenceComparison
+                r.Key.ParentNonScoping == parent &&
+                r.Key.IdentifierName == identifier &&
+                r.Key.Selection == selection);
+            if (oldReference.Key != null)
             {
-                return;
+                _references.TryRemove(oldReference.Key, out _);
             }
 
-            _memberCalls.Add(reference);
+            var newReference = new IdentifierReference(
+                module,
+                scope,
+                parent,
+                identifier,
+                selection,
+                callSiteContext,
+                callee,
+                isAssignmentTarget,
+                hasExplicitLetStatement,
+                annotations,
+                isSetAssigned,
+                isIndexedDefaultMemberAccess,
+                isNonIndexedDefaultMemberAccess,
+                defaultMemberRecursionDepth,
+                isArrayAccess,
+                isProcedureCoercion,
+                isInnerRecursiveDefaultMemberAccess);
+            _references.AddOrUpdate(newReference, 1, (key, value) => 1);
         }
 
-        private readonly Selection _selection;
         /// <summary>
         /// Gets a <c>Selection</c> representing the position of the declaration in the code module.
         /// </summary>
         /// <remarks>
         /// Returns <c>default(Selection)</c> for module identifiers.
         /// </remarks>
-        public Selection Selection { get { return _selection; } }
+        public Selection Selection { get; }
 
-        public QualifiedSelection QualifiedSelection { get { return new QualifiedSelection(_qualifiedName.QualifiedModuleName, _selection); } }
+        public QualifiedSelection QualifiedSelection => new QualifiedSelection(QualifiedName.QualifiedModuleName, Selection);
 
-        /// <summary>
-        /// Gets a reference to the VBProject the declaration is made in.
-        /// </summary>
-        /// <remarks>
-        /// This property is intended to differenciate identically-named VBProjects.
-        /// </remarks>
-        public IVBProject Project { get { return _qualifiedName.QualifiedModuleName.Project; } }
-
-        private readonly string _projectId;
         /// <summary>
         /// Gets a unique identifier for the VBProject the declaration is made in.
         /// </summary>
-        public string ProjectId { get { return _projectId; } }
+        public string ProjectId { get; }
 
-        private readonly string _projectName;
-        public string ProjectName
-        {
-            get { return _projectName; }
-        }
+        public string ProjectName { get; }
+
+        /// <summary>
+        /// WARNING: This property has side effects. It changes the ActiveVBProject, which causes a flicker in the VBE.
+        /// This should only be called if it is *absolutely* necessary.
+        /// </summary>
+        public virtual string ProjectDisplayName => ParentDeclaration.ProjectDisplayName;
 
         public object[] ToArray()
         {
@@ -456,35 +436,31 @@ namespace Rubberduck.Parsing.Symbols
         /// <summary>
         /// Gets the name of the VBComponent the declaration is made in.
         /// </summary>
-        public string ComponentName { get { return _qualifiedName.QualifiedModuleName.ComponentName; } }
+        public string ComponentName => QualifiedName.QualifiedModuleName.ComponentName;
 
-        private readonly string _parentScope;
         /// <summary>
         /// Gets the parent scope of the declaration.
         /// </summary>
-        public string ParentScope { get { return _parentScope; } }
+        public string ParentScope { get; }
 
-        private readonly Declaration _parentScopeDeclaration;
         /// <summary>
         /// Gets the <see cref="Declaration"/> object representing the parent scope of this declaration.
         /// </summary>
-        public Declaration ParentScopeDeclaration { get { return _parentScopeDeclaration; } }
+        public Declaration ParentScopeDeclaration { get; }
 
-        private readonly string _identifierName;
         /// <summary>
         /// Gets the declared name of the identifier.
         /// </summary>
-        public string IdentifierName { get { return _identifierName; } }
+        public string IdentifierName { get; }
 
-        private readonly string _asTypeName;
         /// <summary>
-        /// Gets the name of the declared type.
+        /// Gets the name of the declared type as specified in code.
         /// </summary>
         /// <remarks>
         /// This value is <c>null</c> if not applicable, 
         /// and <c>Variant</c> if applicable but unspecified.
         /// </remarks>
-        public string AsTypeName { get { return _asTypeName; } }
+        public string AsTypeName { get; }
 
         public string AsTypeNameWithoutArrayDesignator
         {
@@ -494,17 +470,37 @@ namespace Rubberduck.Parsing.Symbols
                 {
                     return AsTypeName;
                 }
-                return AsTypeName.Replace("(", "").Replace(")", "").Trim();
+                return AsTypeName.Replace("(", string.Empty).Replace(")", string.Empty).Trim();
             }
         }
 
-        public bool AsTypeIsBaseType
+        /// <summary>
+        /// Gets the fully qualified name of the declared type.
+        /// </summary>
+        /// <remarks>
+        /// This value is <c>null</c> if not applicable, 
+        /// and <c>Variant</c> if applicable but unspecified.
+        /// </remarks>
+        public string FullAsTypeName
         {
             get
             {
-                return string.IsNullOrWhiteSpace(AsTypeName) || BaseTypes.Contains(_asTypeName.ToUpperInvariant());
+                if (AsTypeDeclaration == null)
+                {
+                    return AsTypeName;
+                }
+
+                if (AsTypeDeclaration.DeclarationType.HasFlag(DeclarationType.ClassModule))
+                {
+                    return AsTypeDeclaration.QualifiedModuleName.ToString();
+                }
+
+                //Enums and UDTs have to be qualified by the module they are contained in.
+                return AsTypeDeclaration.QualifiedName.ToString();
             }
         }
+
+        public bool AsTypeIsBaseType => string.IsNullOrWhiteSpace(AsTypeName) || SymbolList.BaseTypes.Contains(AsTypeName.ToUpperInvariant());
 
         private Declaration _asTypeDeclaration;
         public Declaration AsTypeDeclaration
@@ -513,7 +509,7 @@ namespace Rubberduck.Parsing.Symbols
             internal set
             {
                 _asTypeDeclaration = value;
-                IsSelfAssigned = _isSelfAssigned || (DeclarationType == DeclarationType.Variable &&
+                IsSelfAssigned = IsSelfAssigned || (DeclarationType == DeclarationType.Variable &&
                                  AsTypeDeclaration.DeclarationType == DeclarationType.UserDefinedType);
             }
         }
@@ -531,7 +527,6 @@ namespace Rubberduck.Parsing.Symbols
             DeclarationType.LibraryProcedure,
             DeclarationType.LineLabel,
             DeclarationType.ProceduralModule,
-            DeclarationType.ModuleOption,
             DeclarationType.Project,
             DeclarationType.Procedure,
             DeclarationType.PropertyGet,
@@ -547,41 +542,29 @@ namespace Rubberduck.Parsing.Symbols
                    Selection.ContainsFirstCharacter(selection.Selection);
         }
 
-        private bool _isSelfAssigned;
-
         /// <summary>
         /// Gets a value indicating whether the declaration is a joined assignment (e.g. "As New xxxxx")
         /// </summary>
-        public bool IsSelfAssigned
-        {
-            get { return _isSelfAssigned; }
-            private set
-            {
-                _isSelfAssigned = value;
-            }
-        }
+        public bool IsSelfAssigned { get; private set; }
 
-        private readonly Accessibility _accessibility;
         /// <summary>
         /// Gets a value specifying the declaration's visibility.
         /// This value is used in determining the declaration's scope.
         /// </summary>
-        public Accessibility Accessibility { get { return _accessibility; } }
+        public Accessibility Accessibility { get; }
 
-        private readonly DeclarationType _declarationType;
         /// <summary>
         /// Gets a value specifying the type of declaration.
         /// </summary>
-        public DeclarationType DeclarationType { get { return _declarationType; } }
+        public DeclarationType DeclarationType { get; }
 
-        private readonly bool _isWithEvents;
         /// <summary>
         /// Gets a value specifying whether the declared type is an event provider.
         /// </summary>
         /// <remarks>
         /// WithEvents declarations are used to identify event handler procedures in a module.
         /// </remarks>
-        public bool IsWithEvents { get { return _isWithEvents; } }
+        public bool IsWithEvents { get; }
 
         /// <summary>
         /// Returns a string representing the scope of an identifier.
@@ -590,41 +573,37 @@ namespace Rubberduck.Parsing.Symbols
         {
             get
             {
-                switch (_declarationType)
+                switch (DeclarationType)
                 {
                     case DeclarationType.Project:
                         return "VBE";
                     case DeclarationType.ClassModule:
+                    case DeclarationType.Document:
                     case DeclarationType.ProceduralModule:
-                        return _qualifiedName.QualifiedModuleName.ToString();
+                        return QualifiedModuleName.ToString();
                     case DeclarationType.Procedure:
                     case DeclarationType.Function:
+                        return $"{QualifiedModuleName}.{IdentifierName}";
                     case DeclarationType.PropertyGet:
+                        return $"{QualifiedModuleName}.{IdentifierName}.Get";
                     case DeclarationType.PropertyLet:
+                        return $"{QualifiedModuleName}.{IdentifierName}.Let";
                     case DeclarationType.PropertySet:
-                        return _qualifiedName.QualifiedModuleName + "." + _identifierName;
+                        return $"{QualifiedModuleName}.{IdentifierName}.Set";
                     case DeclarationType.Event:
-                        return _parentScope + "." + _identifierName;
+                        return $"{ParentScope}.{IdentifierName}";
                     default:
-                        return _parentScope;
+                        return ParentScope;
                 }
             }
         }
 
-        private readonly string _customFolder;
-        private readonly bool _undeclared;
         /// <summary>
         /// Indicates whether the declaration is an ad-hoc declaration created by the resolver.
         /// </summary>
-        public bool IsUndeclared { get { return _undeclared; } }
+        public bool IsUndeclared { get; }
 
-        public string CustomFolder
-        {
-            get
-            {
-                return _customFolder;
-            }
-        }
+        public virtual string CustomFolder => ParentDeclaration?.CustomFolder ?? ProjectName;
 
         public bool Equals(Declaration other)
         {
@@ -648,22 +627,24 @@ namespace Rubberduck.Parsing.Symbols
             {
                 var hash = 17;
                 hash = hash * 23 + QualifiedName.QualifiedModuleName.GetHashCode();
-                hash = hash * 23 + _identifierName.GetHashCode();
-                hash = hash * 23 + _declarationType.GetHashCode();
+                hash = hash * 23 + IdentifierName.GetHashCode();
+                hash = hash * 23 + DeclarationType.GetHashCode();
                 hash = hash * 23 + Scope.GetHashCode();
-                hash = hash * 23 + _parentScope.GetHashCode();
-                hash = hash * 23 + _selection.GetHashCode();
+                hash = hash * 23 + ParentScope.GetHashCode();
+                hash = hash * 23 + Selection.GetHashCode();
                 return hash;
             }
         }
 
-        public void ClearReferences()
+        public virtual void ClearReferences()
         {
-            while (!_references.IsEmpty)
-            {
-                IdentifierReference reference;
-                _references.TryTake(out reference);
-            }
+            _references = new ConcurrentDictionary<IdentifierReference, int>();
+        }
+
+        public virtual void RemoveReferencesFrom(IReadOnlyCollection<QualifiedModuleName> modulesByWhichToRemoveReferences)
+        {
+            _references = new ConcurrentDictionary<IdentifierReference, int>(_references.Where(reference => !modulesByWhichToRemoveReferences.Contains(reference.Key.QualifiedModuleName)));
         }
     }
 }
+

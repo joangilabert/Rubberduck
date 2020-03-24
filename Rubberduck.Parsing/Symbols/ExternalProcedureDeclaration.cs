@@ -7,9 +7,9 @@ using Rubberduck.Parsing.Grammar;
 
 namespace Rubberduck.Parsing.Symbols
 {
-    public sealed class ExternalProcedureDeclaration : Declaration, IDeclarationWithParameter
+    public sealed class ExternalProcedureDeclaration : Declaration, IParameterizedDeclaration
     {
-        private readonly List<Declaration> _parameters;
+        private readonly List<ParameterDeclaration> _parameters;
 
         public ExternalProcedureDeclaration(
             QualifiedMemberName name,
@@ -20,9 +20,11 @@ namespace Rubberduck.Parsing.Symbols
             VBAParser.AsTypeClauseContext asTypeContext,
             Accessibility accessibility,
             ParserRuleContext context,
+            ParserRuleContext attributesPassContext,
             Selection selection,
-            bool isBuiltIn,
-            IEnumerable<IAnnotation> annotations)
+            bool isUserDefined,
+            IEnumerable<IParseTreeAnnotation> annotations,
+            Attributes attributes)
             : base(
                   name,
                   parent,
@@ -34,25 +36,20 @@ namespace Rubberduck.Parsing.Symbols
                   accessibility,
                   declarationType,
                   context,
+                  attributesPassContext,
                   selection,
                   false,
                   asTypeContext,
-                  isBuiltIn,
+                  isUserDefined,
                   annotations,
-                  null)
+                  attributes)
         {
-            _parameters = new List<Declaration>();
+            _parameters = new List<ParameterDeclaration>();
         }
 
-        public IEnumerable<Declaration> Parameters
-        {
-            get
-            {
-                return _parameters.ToList();
-            }
-        }
+        public IReadOnlyList<ParameterDeclaration> Parameters => _parameters.ToList();
 
-        public void AddParameter(Declaration parameter)
+        public void AddParameter(ParameterDeclaration parameter)
         {
             _parameters.Add(parameter);
         }

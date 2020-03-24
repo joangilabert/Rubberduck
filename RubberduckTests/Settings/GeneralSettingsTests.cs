@@ -1,14 +1,19 @@
-﻿using System.Linq;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.Collections.Generic;
+using System.Linq;
+using NUnit.Framework;
 using Rubberduck.Settings;
 using Rubberduck.UI.Settings;
 using GeneralSettings = Rubberduck.Settings.GeneralSettings;
 using Rubberduck.Common;
 using Moq;
+using Rubberduck.VBEditor.VbeRuntime.Settings;
+using System;
+using Rubberduck.Interaction;
+using Rubberduck.SettingsProvider;
 
 namespace RubberduckTests.Settings
 {
-    [TestClass]
+    [TestFixture]
     public class GeneralSettingsTests
     {
         private Mock<IOperatingSystem> GetOperatingSystemMock()
@@ -16,26 +21,44 @@ namespace RubberduckTests.Settings
             return new Mock<IOperatingSystem>();
         }
 
+        private Mock<IMessageBox> GetMessageBoxMock()
+        {
+            return new Mock<IMessageBox>();
+        }
+
+        private Mock<IVbeSettings> GetVbeSettingsMock()
+        {
+            return new Mock<IVbeSettings>();
+        }
+
+        private Mock<IExperimentalTypesProvider> GetExperimentalTypesProviderMock()
+        {
+            var mock = new Mock<IExperimentalTypesProvider>();
+            mock.Setup(x => x.ExperimentalTypes).Returns(new List<Type>());
+            return mock;
+        }
+
         private Configuration GetDefaultConfig()
         {
             var generalSettings = new GeneralSettings
             {
                 Language = new DisplayLanguageSetting("en-US"),
-                AutoSaveEnabled = false,
+                IsAutoSaveEnabled = false,
                 AutoSavePeriod = 10,
-                Delimiter = '.'
-            };
-
-            var hotkeySettings = new HotkeySettings()
-            {
-                Settings = new[]
+                EnableExperimentalFeatures = new List<ExperimentalFeature>
                 {
-                    new HotkeySetting {Name = "IndentProcedure", IsEnabled = true, Key1 = "CTRL-P"},
-                    new HotkeySetting {Name = "IndentModule", IsEnabled = true, Key1 = "CTRL-M"}
+                    new ExperimentalFeature()
                 }
+                //Delimiter = '.'
             };
 
-            var userSettings = new UserSettings(generalSettings, hotkeySettings, null, null, null, null, null);
+            var hotkeySettings = new HotkeySettings(new[]
+            {
+                new HotkeySetting {CommandTypeName = "FooCommand", IsEnabled = true, Key1 = "A"},
+                new HotkeySetting {CommandTypeName = "BarCommand", IsEnabled = true, Key1 = "B"}
+            });
+
+            var userSettings = new UserSettings(generalSettings, hotkeySettings, null, null, null, null, null, null);
             return new Configuration(userSettings);
         }
 
@@ -44,100 +67,119 @@ namespace RubberduckTests.Settings
             var generalSettings = new GeneralSettings
             {
                 Language = new DisplayLanguageSetting("fr-CA"),
-                AutoSaveEnabled = true,
+                IsAutoSaveEnabled = true,
                 AutoSavePeriod = 5,
-                Delimiter = '/'
+                //Delimiter = '/'
             };
 
-            var hotkeySettings = new HotkeySettings()
+            var hotkeySettings = new HotkeySettings
             {
                 Settings = new[]
                 {
-                    new HotkeySetting{Name="IndentProcedure", IsEnabled=false, Key1="CTRL-C"},
-                    new HotkeySetting{Name="IndentModule", IsEnabled=false, Key1="CTRL-X"}
+                    new HotkeySetting{CommandTypeName="FooCommand", IsEnabled=false, Key1="C"},
+                    new HotkeySetting{CommandTypeName="BarCommand", IsEnabled=false, Key1="D"}
                 }
             };
 
-            var userSettings = new UserSettings(generalSettings, hotkeySettings, null, null, null, null, null);
+            var userSettings = new UserSettings(generalSettings, hotkeySettings, null, null, null, null, null, null);
             return new Configuration(userSettings);
         }
 
-        [TestMethod]
+        [Category("Settings")]
+        [Test]
         public void SaveConfigWorks()
         {
             var customConfig = GetNondefaultConfig();
-            var viewModel = new GeneralSettingsViewModel(customConfig, GetOperatingSystemMock().Object);
+            var viewModel = new GeneralSettingsViewModel(customConfig, GetOperatingSystemMock().Object, GetMessageBoxMock().Object, GetVbeSettingsMock().Object, GetExperimentalTypesProviderMock().Object, null, null);
 
             var config = GetDefaultConfig();
             viewModel.UpdateConfig(config);
 
-            MultiAssert.Aggregate(
-                () => Assert.AreEqual(config.UserSettings.GeneralSettings.Language, viewModel.SelectedLanguage),
-                () => Assert.IsTrue(config.UserSettings.HotkeySettings.Settings.SequenceEqual(viewModel.Hotkeys)),
-                () => Assert.AreEqual(config.UserSettings.GeneralSettings.AutoSaveEnabled, viewModel.AutoSaveEnabled),
-                () => Assert.AreEqual(config.UserSettings.GeneralSettings.AutoSavePeriod, viewModel.AutoSavePeriod),
-                () => Assert.AreEqual(config.UserSettings.GeneralSettings.Delimiter, (char)viewModel.Delimiter));
+            Assert.Multiple(() =>
+            {
+                Assert.AreEqual(config.UserSettings.GeneralSettings.Language, viewModel.SelectedLanguage);
+                Assert.IsTrue(config.UserSettings.HotkeySettings.Settings.SequenceEqual(viewModel.Hotkeys.Select(vm => vm.Unwrap())));
+                Assert.AreEqual(config.UserSettings.GeneralSettings.IsAutoSaveEnabled, viewModel.AutoSaveEnabled);
+                Assert.AreEqual(config.UserSettings.GeneralSettings.AutoSavePeriod, viewModel.AutoSavePeriod);
+            });
         }
 
-        [TestMethod]
+        [Category("Settings")]
+        [Test]
         public void SetDefaultsWorks()
         {
-            var viewModel = new GeneralSettingsViewModel(GetNondefaultConfig(), GetOperatingSystemMock().Object);
+            var viewModel = new GeneralSettingsViewModel(GetNondefaultConfig(), GetOperatingSystemMock().Object, GetMessageBoxMock().Object, GetVbeSettingsMock().Object, GetExperimentalTypesProviderMock().Object, null, null);
 
             var defaultConfig = GetDefaultConfig();
             viewModel.SetToDefaults(defaultConfig);
 
-            MultiAssert.Aggregate(
-                () => Assert.AreEqual(defaultConfig.UserSettings.GeneralSettings.Language, viewModel.SelectedLanguage),
-                () => Assert.IsTrue(defaultConfig.UserSettings.HotkeySettings.Settings.SequenceEqual(viewModel.Hotkeys)),
-                () => Assert.AreEqual(defaultConfig.UserSettings.GeneralSettings.AutoSaveEnabled, viewModel.AutoSaveEnabled),
-                () => Assert.AreEqual(defaultConfig.UserSettings.GeneralSettings.AutoSavePeriod, viewModel.AutoSavePeriod),
-                () => Assert.AreEqual(defaultConfig.UserSettings.GeneralSettings.Delimiter, (char)viewModel.Delimiter));
+            Assert.Multiple(() =>
+            {
+                Assert.AreEqual(defaultConfig.UserSettings.GeneralSettings.Language, viewModel.SelectedLanguage);
+                Assert.IsTrue(defaultConfig.UserSettings.HotkeySettings.Settings.SequenceEqual(viewModel.Hotkeys.Select(vm => vm.Unwrap())));
+                Assert.AreEqual(defaultConfig.UserSettings.GeneralSettings.IsAutoSaveEnabled, viewModel.AutoSaveEnabled);
+                Assert.AreEqual(defaultConfig.UserSettings.GeneralSettings.AutoSavePeriod, viewModel.AutoSavePeriod);
+            });
         }
 
-        [TestMethod]
+        [Category("Settings")]
+        [Test]
         public void LanguageIsSetInCtor()
         {
             var defaultConfig = GetDefaultConfig();
-            var viewModel = new GeneralSettingsViewModel(defaultConfig, GetOperatingSystemMock().Object);
+            var viewModel = new GeneralSettingsViewModel(defaultConfig, GetOperatingSystemMock().Object, GetMessageBoxMock().Object, GetVbeSettingsMock().Object, GetExperimentalTypesProviderMock().Object, null, null);
 
             Assert.AreEqual(defaultConfig.UserSettings.GeneralSettings.Language, viewModel.SelectedLanguage);
         }
 
-        [TestMethod]
+        [Category("Settings")]
+        [Test]
         public void HotkeysAreSetInCtor()
         {
             var defaultConfig = GetDefaultConfig();
-            var viewModel = new GeneralSettingsViewModel(defaultConfig, GetOperatingSystemMock().Object);
+            var viewModel = new GeneralSettingsViewModel(defaultConfig, GetOperatingSystemMock().Object, GetMessageBoxMock().Object, GetVbeSettingsMock().Object, GetExperimentalTypesProviderMock().Object, null, null);
 
-            Assert.IsTrue(defaultConfig.UserSettings.HotkeySettings.Settings.SequenceEqual(viewModel.Hotkeys));
+            Assert.IsTrue(defaultConfig.UserSettings.HotkeySettings.Settings.SequenceEqual(viewModel.Hotkeys.Select(vm => vm.Unwrap())));
         }
 
-        [TestMethod]
+        [Category("Settings")]
+        [Test]
         public void AutoSaveEnabledIsSetInCtor()
         {
             var defaultConfig = GetDefaultConfig();
-            var viewModel = new GeneralSettingsViewModel(defaultConfig, GetOperatingSystemMock().Object);
+            var viewModel = new GeneralSettingsViewModel(defaultConfig, GetOperatingSystemMock().Object, GetMessageBoxMock().Object, GetVbeSettingsMock().Object, GetExperimentalTypesProviderMock().Object, null, null);
 
-            Assert.AreEqual(defaultConfig.UserSettings.GeneralSettings.AutoSaveEnabled, viewModel.AutoSaveEnabled);
+            Assert.AreEqual(defaultConfig.UserSettings.GeneralSettings.IsAutoSaveEnabled, viewModel.AutoSaveEnabled);
         }
 
-        [TestMethod]
+        [Category("Settings")]
+        [Test]
         public void AutoSavePeriodIsSetInCtor()
         {
             var defaultConfig = GetDefaultConfig();
-            var viewModel = new GeneralSettingsViewModel(defaultConfig, GetOperatingSystemMock().Object);
+            var viewModel = new GeneralSettingsViewModel(defaultConfig, GetOperatingSystemMock().Object, GetMessageBoxMock().Object, GetVbeSettingsMock().Object, GetExperimentalTypesProviderMock().Object, null, null);
 
             Assert.AreEqual(defaultConfig.UserSettings.GeneralSettings.AutoSavePeriod, viewModel.AutoSavePeriod);
         }
 
-        [TestMethod]
-        public void DelimiterIsSetInCtor()
+        [Category("Settings")]
+        [Test]
+        public void UserSettingsLoadedUsingDefaultWhenMissingFile()
         {
-            var defaultConfig = GetDefaultConfig();
-            var viewModel = new GeneralSettingsViewModel(defaultConfig, GetOperatingSystemMock().Object);
+            var pathProviderMock = new Mock<IPersistencePathProvider>();
+            pathProviderMock.Setup(x => x.DataRootPath).Returns(@"C:\some\non\existent\path\rubberduck");
+            pathProviderMock.Setup(x => x.DataFolderPath(It.IsAny<string>())).Returns<string>(x => x);
+            // For this test, we need to use the actual object. Fortunately, the path is virtual, so we
+            // can override that property and force it to use an non-existent path to prove that settings
+            // will be still created using defaults without the file present. 
+            var persisterMock = new Mock<XmlPersistenceService<GeneralSettings>>(pathProviderMock.Object);
+            persisterMock.CallBase = true;
+            var configProvider = new GeneralConfigProvider(persisterMock.Object);
 
-            Assert.AreEqual(defaultConfig.UserSettings.GeneralSettings.Delimiter, (char)viewModel.Delimiter);
+            var settings = configProvider.Read();
+            var defaultSettings = configProvider.ReadDefaults();
+
+            Assert.AreEqual(defaultSettings, settings);
         }
     }
 }

@@ -1,50 +1,28 @@
 using System.Linq;
-using System.Threading;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Moq;
-using Rubberduck.Inspections;
-using Rubberduck.Inspections.QuickFixes;
-using Rubberduck.Inspections.Resources;
+using NUnit.Framework;
+using Rubberduck.CodeAnalysis.Inspections;
+using Rubberduck.CodeAnalysis.Inspections.Concrete;
 using Rubberduck.Parsing.VBA;
-using Rubberduck.VBEditor.Application;
-using Rubberduck.VBEditor.Events;
-using Rubberduck.VBEditor.SafeComWrappers.Abstract;
-using RubberduckTests.Mocks;
 
 namespace RubberduckTests.Inspections
 {
-    [TestClass]
-    public class VariableNotUsedInspectionTests
+    [TestFixture]
+    public class VariableNotUsedInspectionTests : InspectionTestsBase
     {
-        [TestMethod]
-        [TestCategory("Inspections")]
+        [Test]
+        [Category("Inspections")]
         public void VariableNotUsed_ReturnsResult()
         {
             const string inputCode =
 @"Sub Foo()
     Dim var1 As String
 End Sub";
-
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component);
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var inspection = new VariableNotUsedInspection(parser.State);
-            var inspectionResults = inspection.GetInspectionResults();
-
-            Assert.AreEqual(1, inspectionResults.Count());
+            Assert.AreEqual(1, InspectionResultsForStandardModule(inputCode).Count());
         }
 
-        [TestMethod]
-        [TestCategory("Inspections")]
-        public void VariableNotUsed_ReturnsResult_MultipleVariables()
+        [Test]
+        [Category("Inspections")]
+        public void VariableNotUsed_MultipleVariables_ReturnsResult()
         {
             const string inputCode =
 @"Sub Foo()
@@ -52,65 +30,37 @@ End Sub";
     Dim var2 As Date
 End Sub";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component);
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var inspection = new VariableNotUsedInspection(parser.State);
-            var inspectionResults = inspection.GetInspectionResults();
-
-            Assert.AreEqual(2, inspectionResults.Count());
+            Assert.AreEqual(2, InspectionResultsForStandardModule(inputCode).Count());
         }
 
-        [TestMethod]
-        [TestCategory("Inspections")]
+        [Test]
+        [Category("Inspections")]
         public void VariableUsed_DoesNotReturnResult()
         {
             const string inputCode =
-@"Function Foo() As Boolean
-    Dim var1 as String
+@"Sub Foo()
+    Dim var1 As String
     var1 = ""test""
 
     Goo var1
-End Function
+End Sub
 
 Sub Goo(ByVal arg1 As String)
 End Sub";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component);
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var inspection = new VariableNotUsedInspection(parser.State);
-            var inspectionResults = inspection.GetInspectionResults();
-
-            Assert.AreEqual(0, inspectionResults.Count());
+            Assert.AreEqual(0, InspectionResultsForStandardModule(inputCode).Count());
         }
 
-        [TestMethod]
-        [TestCategory("Inspections")]
-        public void VariableNotUsed_ReturnsResult_MultipleVariables_SomeAssigned()
+        [Test]
+        [Category("Inspections")]
+        public void VariableNotUsed_MultipleVariables_OneAssignedAndReferenced_ReturnsResult()
         {
             const string inputCode =
 @"Sub Foo()
-    Dim var1 as Integer
+    Dim var1 As Integer
     var1 = 8
 
-    Dim var2 as String
+    Dim var2 As String
 
     Goo var1
 End Sub
@@ -118,25 +68,11 @@ End Sub
 Sub Goo(ByVal arg1 As Integer)
 End Sub";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component);
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var inspection = new VariableNotUsedInspection(parser.State);
-            var inspectionResults = inspection.GetInspectionResults();
-
-            Assert.AreEqual(1, inspectionResults.Count());
+            Assert.AreEqual(1, InspectionResultsForStandardModule(inputCode).Count());
         }
 
-        [TestMethod]
-        [TestCategory("Inspections")]
+        [Test]
+        [Category("Inspections")]
         public void VariableNotUsed_Ignored_DoesNotReturnResult()
         {
             const string inputCode =
@@ -145,105 +81,54 @@ End Sub";
     Dim var1 As String
 End Sub";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component);
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var inspection = new VariableNotUsedInspection(parser.State);
-            var inspectionResults = inspection.GetInspectionResults();
-
-            Assert.IsFalse(inspectionResults.Any());
+            Assert.AreEqual(0, InspectionResultsForStandardModule(inputCode).Count());
         }
 
-        [TestMethod]
-        [TestCategory("Inspections")]
-        public void UnassignedVariable_QuickFixWorks()
+        [Test]
+        [Category("Inspections")]
+        public void VariableNotUsed_UsedInNameStatement_DoesNotReturnsResult()
         {
             const string inputCode =
 @"Sub Foo()
     Dim var1 As String
+    Name ""foo"" As var1
 End Sub";
 
-            const string expectedCode =
-@"Sub Foo()
-End Sub";
-
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var inspection = new VariableNotUsedInspection(parser.State);
-            inspection.GetInspectionResults().First().QuickFixes.First().Fix();
-
-            Assert.AreEqual(expectedCode, module.Content());
+            Assert.AreEqual(0, InspectionResultsForStandardModule(inputCode).Count());
         }
 
-        [TestMethod]
-        [TestCategory("Inspections")]
-        public void UnassignedVariable_IgnoreQuickFixWorks()
+        //https://github.com/rubberduck-vba/Rubberduck/issues/5088        
+        [Test]
+        [Category("Inspections")]
+        public void VariableNotUsed_AssignedButNeverReferenced_ReturnsResult()
         {
             const string inputCode =
 @"Sub Foo()
     Dim var1 As String
+    var1 = ""test""
 End Sub";
 
-            const string expectedCode =
-@"Sub Foo()
-'@Ignore VariableNotUsed
-    Dim var1 As String
+            Assert.AreEqual(1, InspectionResultsForStandardModule(inputCode).Count());
+        }
+
+        [Test]
+        [Category("Inspections")]
+        public void VariableNotUsed_AssignedMultpleTimesButNeverReferenced_ReturnsResult()
+        {
+            const string inputCode =
+@"Public Sub Foo()
+    Dim var2 As Long
+    var2 = 4
+    var2 = 7
+    var2 = 8
 End Sub";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var inspection = new VariableNotUsedInspection(parser.State);
-            inspection.GetInspectionResults().First().QuickFixes.Single(s => s is IgnoreOnceQuickFix).Fix();
-
-            Assert.AreEqual(expectedCode, module.Content());
+            Assert.AreEqual(1, InspectionResultsForStandardModule(inputCode).Count());
         }
 
-        [TestMethod]
-        [TestCategory("Inspections")]
-        public void InspectionType()
+        protected override IInspection InspectionUnderTest(RubberduckParserState state)
         {
-            var inspection = new VariableNotUsedInspection(null);
-            Assert.AreEqual(CodeInspectionType.CodeQualityIssues, inspection.InspectionType);
-        }
-
-        [TestMethod]
-        [TestCategory("Inspections")]
-        public void InspectionName()
-        {
-            const string inspectionName = "VariableNotUsedInspection";
-            var inspection = new VariableNotUsedInspection(null);
-
-            Assert.AreEqual(inspectionName, inspection.Name);
+            return new VariableNotUsedInspection(state);
         }
     }
 }

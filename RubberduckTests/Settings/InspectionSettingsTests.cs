@@ -1,13 +1,14 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Rubberduck.Inspections.Resources;
+using NUnit.Framework;
+using Rubberduck.CodeAnalysis.Inspections;
+using Rubberduck.CodeAnalysis.Settings;
 using Rubberduck.Settings;
 using Rubberduck.UI.Settings;
 
 namespace RubberduckTests.Settings
 {
-    [TestClass]
+    [TestFixture]
     public class InspectionSettingsTests
     {
         private Configuration GetDefaultConfig()
@@ -16,16 +17,17 @@ namespace RubberduckTests.Settings
             {
                 CodeInspections = new HashSet<CodeInspectionSetting>(new[]
                 {
-                    new CodeInspectionSetting("DoNotShowInspection", "Do not show me", CodeInspectionType.LanguageOpportunities, CodeInspectionSeverity.DoNotShow, CodeInspectionSeverity.DoNotShow),
-                    new CodeInspectionSetting("HintInspection", "I'm a hint", CodeInspectionType.LanguageOpportunities, CodeInspectionSeverity.Hint, CodeInspectionSeverity.Hint),
-                    new CodeInspectionSetting("SuggestionInspection", "I'm a suggestion", CodeInspectionType.MaintainabilityAndReadabilityIssues, CodeInspectionSeverity.Suggestion, CodeInspectionSeverity.Suggestion),
-                    new CodeInspectionSetting("WarningInspection", "I'm a warning", CodeInspectionType.CodeQualityIssues, CodeInspectionSeverity.Warning, CodeInspectionSeverity.Warning),
-                    new CodeInspectionSetting("ErrorInspection", "FIX ME!", CodeInspectionType.CodeQualityIssues, CodeInspectionSeverity.Error, CodeInspectionSeverity.Error),
-                    new CodeInspectionSetting("NondefaultSeverityInspection", "I do not have my original severity", CodeInspectionType.LanguageOpportunities, CodeInspectionSeverity.Warning, CodeInspectionSeverity.DoNotShow)
-                })
+                    new CodeInspectionSetting("DoNotShowInspection", "Do not show me", CodeInspectionType.LanguageOpportunities, CodeInspectionSeverity.DoNotShow),
+                    new CodeInspectionSetting("HintInspection", "I'm a hint", CodeInspectionType.LanguageOpportunities, CodeInspectionSeverity.Hint),
+                    new CodeInspectionSetting("SuggestionInspection", "I'm a suggestion", CodeInspectionType.MaintainabilityAndReadabilityIssues, CodeInspectionSeverity.Suggestion),
+                    new CodeInspectionSetting("WarningInspection", "I'm a warning", CodeInspectionType.CodeQualityIssues),
+                    new CodeInspectionSetting("NondefaultSeverityInspection", "I do not have my original severity", CodeInspectionType.LanguageOpportunities,CodeInspectionSeverity.DoNotShow),
+                    new CodeInspectionSetting("ErrorInspection", "FIX ME!", CodeInspectionType.CodeQualityIssues, CodeInspectionSeverity.Error)
+                }.OrderBy(cis => cis.TypeLabel)
+                    .ThenBy(cis => cis.Description)) // Explicit sorting is to match InspectionSettingsViewModel.cs
             };
 
-            var userSettings = new UserSettings(null, null, null, inspectionSettings, null, null, null);
+            var userSettings = new UserSettings(null, null, null, null, inspectionSettings, null, null, null);
             return new Configuration(userSettings);
         }
 
@@ -35,59 +37,64 @@ namespace RubberduckTests.Settings
             {
                 CodeInspections = new HashSet<CodeInspectionSetting>(new[]
                 {
-                    new CodeInspectionSetting("DoNotShowInspection", "Do not show me", CodeInspectionType.LanguageOpportunities, CodeInspectionSeverity.DoNotShow, CodeInspectionSeverity.Warning),
-                    new CodeInspectionSetting("HintInspection", "I'm a hint", CodeInspectionType.LanguageOpportunities, CodeInspectionSeverity.Hint, CodeInspectionSeverity.Suggestion),
-                    new CodeInspectionSetting("SuggestionInspection", "I'm a suggestion", CodeInspectionType.MaintainabilityAndReadabilityIssues, CodeInspectionSeverity.Suggestion, CodeInspectionSeverity.Hint),
-                    new CodeInspectionSetting("WarningInspection", "I'm a warning", CodeInspectionType.CodeQualityIssues, CodeInspectionSeverity.Warning, CodeInspectionSeverity.Error),
-                    new CodeInspectionSetting("ErrorInspection", "FIX ME!", CodeInspectionType.CodeQualityIssues, CodeInspectionSeverity.Error, CodeInspectionSeverity.DoNotShow),
-                    new CodeInspectionSetting("NondefaultSeverityInspection", "I do not have my original severity", CodeInspectionType.LanguageOpportunities, CodeInspectionSeverity.Warning, CodeInspectionSeverity.Error)
-                })
+                    new CodeInspectionSetting("DoNotShowInspection", "Do not show me", CodeInspectionType.LanguageOpportunities),
+                    new CodeInspectionSetting("HintInspection", "I'm a hint", CodeInspectionType.LanguageOpportunities, CodeInspectionSeverity.Suggestion),
+                    new CodeInspectionSetting("SuggestionInspection", "I'm a suggestion", CodeInspectionType.MaintainabilityAndReadabilityIssues, CodeInspectionSeverity.Hint),
+                    new CodeInspectionSetting("WarningInspection", "I'm a warning", CodeInspectionType.CodeQualityIssues, CodeInspectionSeverity.Error),
+                    new CodeInspectionSetting("NondefaultSeverityInspection", "I do not have my original severity", CodeInspectionType.LanguageOpportunities, CodeInspectionSeverity.Error),
+                    new CodeInspectionSetting("ErrorInspection", "FIX ME!", CodeInspectionType.CodeQualityIssues, CodeInspectionSeverity.DoNotShow)
+                }.OrderBy(cis => cis.TypeLabel)
+                    .ThenBy(cis => cis.Description)) // Explicit sorting is to match InspectionSettingsViewModel.cs
             };
 
-            var userSettings = new UserSettings(null, null, null, inspectionSettings, null, null, null);
+            var userSettings = new UserSettings(null, null, null, null, inspectionSettings, null, null, null);
             return new Configuration(userSettings);
         }
 
-        [TestMethod]
+        [Category("Settings")]
+        [Test]
         public void SaveConfigWorks()
         {
             var customConfig = GetNondefaultConfig();
-            var viewModel = new InspectionSettingsViewModel(customConfig);
+            var viewModel = new InspectionSettingsViewModel(customConfig, null);
 
             var config = GetDefaultConfig();
             viewModel.UpdateConfig(config);
 
-            Assert.IsTrue(config.UserSettings.CodeInspectionSettings.CodeInspections.SequenceEqual(
-                    viewModel.InspectionSettings.SourceCollection.OfType<CodeInspectionSetting>()));
+            Assert.IsTrue(config.UserSettings.CodeInspectionSettings.CodeInspections.OrderBy(setting => setting.InspectionType).SequenceEqual(
+                    viewModel.InspectionSettings.SourceCollection.OfType<CodeInspectionSetting>().OrderBy(setting => setting.InspectionType)));
         }
 
-        [TestMethod]
+        [Category("Settings")]
+        [Test]
         public void SetDefaultsWorks()
         {
-            var viewModel = new InspectionSettingsViewModel(GetNondefaultConfig());
+            var viewModel = new InspectionSettingsViewModel(GetNondefaultConfig(), null);
 
             var defaultConfig = GetDefaultConfig();
             viewModel.SetToDefaults(defaultConfig);
 
-            Assert.IsTrue(defaultConfig.UserSettings.CodeInspectionSettings.CodeInspections.SequenceEqual(
-                    viewModel.InspectionSettings.SourceCollection.OfType<CodeInspectionSetting>()));
+            Assert.IsTrue(defaultConfig.UserSettings.CodeInspectionSettings.CodeInspections.OrderBy(setting => setting.InspectionType).SequenceEqual(
+                    viewModel.InspectionSettings.SourceCollection.OfType<CodeInspectionSetting>().OrderBy(setting => setting.InspectionType)));
         }
 
-        [TestMethod]
+        [Category("Settings")]
+        [Test]
         public void InspectionsAreSetInCtor()
         {
             var defaultConfig = GetDefaultConfig();
-            var viewModel = new InspectionSettingsViewModel(defaultConfig);
+            var viewModel = new InspectionSettingsViewModel(defaultConfig, null);
 
-            Assert.IsTrue(defaultConfig.UserSettings.CodeInspectionSettings.CodeInspections.SequenceEqual(
-                    viewModel.InspectionSettings.SourceCollection.OfType<CodeInspectionSetting>()));
+            Assert.IsTrue(defaultConfig.UserSettings.CodeInspectionSettings.CodeInspections.OrderBy(setting => setting.InspectionType).SequenceEqual(
+                    viewModel.InspectionSettings.SourceCollection.OfType<CodeInspectionSetting>().OrderBy(setting => setting.InspectionType)));
         }
 
-        [TestMethod]
+        [Category("Settings")]
+        [Test]
         public void InspectionSeveritiesAreUpdated()
         {
             var defaultConfig = GetDefaultConfig();
-            var viewModel = new InspectionSettingsViewModel(defaultConfig);
+            var viewModel = new InspectionSettingsViewModel(defaultConfig, null);
 
             viewModel.InspectionSettings.SourceCollection.OfType<CodeInspectionSetting>().First().Severity =
                 GetNondefaultConfig().UserSettings.CodeInspectionSettings.CodeInspections.First().Severity;
@@ -96,8 +103,8 @@ namespace RubberduckTests.Settings
             updatedConfig.UserSettings.CodeInspectionSettings.CodeInspections.First().Severity =
                 GetNondefaultConfig().UserSettings.CodeInspectionSettings.CodeInspections.First().Severity;
 
-            Assert.IsTrue(updatedConfig.UserSettings.CodeInspectionSettings.CodeInspections.SequenceEqual(
-                    viewModel.InspectionSettings.SourceCollection.OfType<CodeInspectionSetting>()));
+            Assert.IsTrue(updatedConfig.UserSettings.CodeInspectionSettings.CodeInspections.OrderBy(setting => setting.InspectionType).SequenceEqual(
+                    viewModel.InspectionSettings.SourceCollection.OfType<CodeInspectionSetting>().OrderBy(setting => setting.InspectionType)));
         }
     }
 }

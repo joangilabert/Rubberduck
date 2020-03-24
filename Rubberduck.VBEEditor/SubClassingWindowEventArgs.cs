@@ -1,20 +1,16 @@
 using System;
-using System.Windows.Forms;
 
-namespace Rubberduck.VBEditor
+namespace Rubberduck.VBEditor.Events
 {
     public class SubClassingWindowEventArgs : EventArgs
     {
-        private readonly Message _msg;
+        public IntPtr LParam { get; }
 
-        public Message Message
-        {
-            get { return _msg; }
-        }
+        public bool Closing { get; set; }
 
-        public SubClassingWindowEventArgs(Message msg)
+        public SubClassingWindowEventArgs(IntPtr lparam)
         {
-            _msg = msg;
+            LParam = lparam;
         }
     }
 }

@@ -1,17 +1,159 @@
-version: 2.0.{build}-{branch}
-build:
-  verbosity: normal
+version: '2.5.0.{build}'
 
-configuration: Release
+# add nuget api to hosts file, making sure we can actually nuget restore for the build
+hosts:
+  api.nuget.org: 93.184.221.200
 
+# enforce crlf fixing
 init:
-  - git config --global core.autocrlf true
+  git config --global core.autocrlf true
 
+# history limited to 15 commits, since we ran into trouble with a limit of 3
+# the limit can be rather generous
+clone_depth: 15
+# explicitly do not shallow-clone. 
+# Line-Endings are wrong on github, because of CRLF fixing
+# shallow-clone would download a zip, which doesn't fix the line-endings for unit-tests
+shallow_clone: false
+
+# ignore a certain subset of files when evaluating build-changes
+skip_commits:
+  files:
+  - docs/*
+  - '**/*.md'
+  - license
+  - License.rtf
+branches:
+  only:
+  - master
+  - next
+skip_tags: true
+
+# build-matrix: all Release CPUs on VS2017
+image: Visual Studio 2017
+configuration: Release
+platform: Any CPU
+
+# cache the nuget packages unless something changed there
+cache:
+  - packages/ -> **/packages.config
+  - '%USERPROFILE%/.gradle/wrapper/dists'
+
+install:
+  set PATH=C:\Program Files (x86)\MSBuild\15.0\Bin;C:\Program Files (x86)\Java\jdk1.8.0;%PATH%
+
+# patch version specifiers in the base project
+dotnet_csproj:
+  patch: true
+  # patch version specifier in Core that's non-wildcard to deal with XAML generated code?
+  file: 'RubberduckBaseProject.csproj' # ;*\Rubberduck.Core.csproj'
+  version: '{version}'
+  assembly_version: '{version}'
+
+# set up the environment variables used later in the build process
+environment:
+  installer_dir: Rubberduck.Deployment\InnoSetup\Installers\
+  codecov_token:
+    secure: WXzsqA7du+xTCQN0p06UFYOe94bKkB1ZtyCWS0Xlsu7OwIwKIa/OPaHj8Yev1JGl
+
+before_build:
+  - development/java/Rubberduck.Parsing/Grammar/gradlew.bat -p development/java/Rubberduck.Parsing/Grammar clean build
+  - cinst innosetup -version 5.6.1
+  - cinst codecov
+  - cinst opencover.portable
+  - nuget restore RubberduckMeta.sln
+  - nuget restore Rubberduck.sln
+build:
+  verbosity: minimal
+  project: Rubberduck.sln
+
+# TestScript depends on the build matrix to only contain Release cpu
+# Otherwise we might run tests against artifacts that do not exist
+test_script:
+  # we use -returntargetcode to fail the build if tests fail
+  # when using test_script, after_test seems to not be executed
+  # Manually select coverage instrumentation using "-register:Path64" to fix coverage generation
+  # Limit number of visits recorded with threshold to improve performance
+  - |
+    OpenCover.Console.exe -register:Path64 -returntargetcode -target:"nunit3-console.exe" -threshold:10 -targetargs:".\RubberduckTests\bin\RubberduckTests.dll" -output:".\Rubberduck_Coverage.xml"
+    OpenCover.Console.exe -register:Path64 -returntargetcode -target:"nunit3-console.exe" -threshold:10 -targetargs:".\RubberduckTestsCodeAnalysis\bin\RubberduckTestsCodeAnalysis.dll" -output:".\RubberduckCodeAnalysis_Coverage.xml"
+    codecov -f "Rubberduck_Coverage.xml RubberduckCodeAnalysis_Coverage.xml"
+    
+# Define the installer-name depending on what branch we're building on
+for:
+- 
+  branches:
+    only:
+    - next
+  environment:
+    installer_name: Rubberduck.Setup.%APPVEYOR_BUILD_VERSION%-pre.exe
+    release_name: Rubberduck v%APPVEYOR_BUILD_VERSION%-pre
+- 
+  branches:
+    only:
+    - master
+  environment:
+    installer_name: Rubberduck.Setup.%APPVEYOR_BUILD_VERSION%.exe
+    release_name: Rubberduck v%APPVEYOR_BUILD_VERSION%
+- 
+  branches:
+    except:
+      - master
+      - next
+  environment:
+    # fall back to naming the installer something that shows we're in an unexpected state
+    installer_name: Rubberduck.Setup.%APPVEYOR_BUILD_VERSION%-unexpected.exe
+    release_name: Rubberduck v%APPVEYOR_BUILD_VERSION%-%APPVEYOR_REPO_BRANCH%
+
+# Create Installers to store at appveyor and upload to github
+after_test:
+  - cmd: iscc /O "Rubberduck.Deployment\InnoSetup\Rubberduck.Installer.Build.iss"
+  - cmd: move %INSTALLER_DIR%\Rubberduck.Setup.exe %INSTALLER_DIR%\%INSTALLER_NAME%
+  - ps: |
+      $installer = "$env:INSTALLER_DIR\$env:INSTALLER_NAME"
+      $sha = Get-FileHash -Path $installer -Algorithm SHA256
+      Set-Content -Path "$($installer)_sha256.hash" -Value $sha.Hash
+
+# grab the installers we produce and upload them to github :)
+artifacts:
+  - path: Rubberduck.Deployment\InnoSetup\Installers\Rubberduck.Setup.*.exe
+    name: Rubberduck
+  - path: Rubberduck.Deployment\bin\Rubberduck.CodeAnalysis.xml
+    name: InspectionDocs
+  - path: Rubberduck.Deployment\InnoSetup\Installers\*.hash
+    name: InstallerHashes
+  - path: Rubberduck_Coverage.xml
+    name: MainCoverage
+  - path: RubberduckCodeAnalysis_Coverage.xml
+    name: AnalysisCoverage
+deploy:
+  - provider: GitHub
+    tag: RETAGMEWITHAMESSAGE
+    release: $(release_name)
+    draft: true
+    prerelease: false
+    description: "Built with :heart: by AppVeyor CI on [$(appveyor_repo_branch)] - https://ci.appveyor.com/project/rubberduck-vba/rubberduck/build/$(appveyor_build_version)"
+    auth_token:
+      secure: NVAZgFRSk566SP5QDge5gYRWCaLi4NJJPTNk3QengH15wL9iVldfrFOllbzKXExq
+    artifact: Rubberduck, InspectionDocs, InstallerHashes
+    on: 
+      branch: master
+  - provider: GitHub
+    tag: Prerelease-v$(appveyor_build_version)
+    release: $(release_name)
+    draft: false
+    prerelease: true
+    description: "AppVeyor build on [$(appveyor_repo_branch)] - https://ci.appveyor.com/project/rubberduck-vba/rubberduck/build/$(appveyor_build_version)"
+    auth_token:
+      secure: NVAZgFRSk566SP5QDge5gYRWCaLi4NJJPTNk3QengH15wL9iVldfrFOllbzKXExq
+    artifact: Rubberduck, InspectionDocs, InstallerHashes
+    on: 
+      branch: next
+
+# This is Duga posting stuff to the war room
 notifications:
-- provider: Webhook
-  url: http://stats.zomis.net:8081/hooks/appveyor?roomId=14929
-  headers:
-    X-Duga-Event: duga42
-  on_build_success: true
-  on_build_failure: true
-  on_build_status_changed: true
+  - provider: Webhook
+    url: http://stats.zomis.net/GithubHookSEChatService/hooks/github/payload?roomId=14929
+    on_build_success: true
+    on_build_failure: true
+    on_build_status_changed: false

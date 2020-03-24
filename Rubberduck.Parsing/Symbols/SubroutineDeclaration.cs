@@ -5,13 +5,12 @@ using Rubberduck.Parsing.VBA;
 using Rubberduck.VBEditor;
 using System.Collections.Generic;
 using System.Linq;
+using static Rubberduck.Parsing.Grammar.VBAParser;
 
 namespace Rubberduck.Parsing.Symbols
 {
-    public sealed class SubroutineDeclaration : Declaration, IDeclarationWithParameter, ICanBeDefaultMember
+    public sealed class SubroutineDeclaration : ModuleBodyElementDeclaration
     {
-        private readonly List<Declaration> _parameters;
-
         public SubroutineDeclaration(
             QualifiedMemberName name,
             Declaration parent,
@@ -19,9 +18,10 @@ namespace Rubberduck.Parsing.Symbols
             string asTypeName,
             Accessibility accessibility,
             ParserRuleContext context,
+            ParserRuleContext attributesPassContext,
             Selection selection,
-            bool isBuiltIn,
-            IEnumerable<IAnnotation> annotations,
+            bool isUserDefined,
+            IEnumerable<IParseTreeAnnotation> annotations,
             Attributes attributes)
             : base(
                   name,
@@ -29,71 +29,54 @@ namespace Rubberduck.Parsing.Symbols
                   parentScope,
                   asTypeName,
                   null,
-                  false,
-                  false,
+                  string.Empty,
                   accessibility,
                   DeclarationType.Procedure,
                   context,
+                  attributesPassContext,
                   selection,
                   false,
-                  null,
-                  isBuiltIn,
+                  isUserDefined,
                   annotations,
                   attributes)
+        { }
+
+        public SubroutineDeclaration(ComMember member, Declaration parent, QualifiedModuleName module, Attributes attributes, bool eventHandler)
+            : base(
+                  module.QualifyMemberName(member.Name),
+                  parent,
+                  parent,
+                  string.Empty,
+                  null,
+                  string.Empty,
+                  Accessibility.Global,
+                  eventHandler ? DeclarationType.Event : DeclarationType.Procedure,
+                  null,
+                  null,
+                  Selection.Home,
+                  false,
+                  false,
+                  null,
+                  attributes)
         {
-            _parameters = new List<Declaration>();
+            AddParameters(member.Parameters.Select(decl => new ParameterDeclaration(decl, this, module)));
         }
 
-        public SubroutineDeclaration(ComMember member, Declaration parent, QualifiedModuleName module,
-            Attributes attributes)
-            : this(
-                module.QualifyMemberName(member.Name),
-                parent,
-                parent,
-                string.Empty,
-                Accessibility.Global,
-                null,
-                Selection.Home,
-                true,
-                null,
-                attributes)
+        /// <inheritdoc/>
+        protected override bool Implements(IInterfaceExposable member)
         {
-            _parameters =
-                member.Parameters.Select(decl => new ParameterDeclaration(decl, this, module))
-                    .Cast<Declaration>()
-                    .ToList();          
-        }
-
-        public IEnumerable<Declaration> Parameters
-        {
-            get
+            if (ReferenceEquals(member, this))
             {
-                return _parameters.ToList();
-            }
-        }
-
-        public void AddParameter(Declaration parameter)
-        {
-            _parameters.Add(parameter);
-        }
-
-        /// <summary>
-        /// Gets an attribute value indicating whether a member is a class' default member.
-        /// If this value is true, any reference to an instance of the class it's the default member of,
-        /// should count as a member call to this member.
-        /// </summary>
-        public bool IsDefaultMember
-        {
-            get
-            {
-                IEnumerable<string> value;
-                if (Attributes.TryGetValue(IdentifierName + ".VB_UserMemId", out value))
-                {
-                    return value.Single() == "0";
-                }
-
                 return false;
             }
+
+            return DeclarationType == DeclarationType.Procedure
+                   && member.DeclarationType == DeclarationType.Procedure
+                   && IdentifierName.Equals(member.ImplementingIdentifierName)
+                   && member.IsInterfaceMember
+                   && ((ClassModuleDeclaration)member.ParentDeclaration).Subtypes.Any(implementation => ReferenceEquals(implementation, ParentDeclaration));
         }
+
+        public override BlockContext Block => ((SubStmtContext)Context).block();
     }
 }

@@ -1,0 +1,128 @@
+﻿<UserControl xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:toDoItems="clr-namespace:Rubberduck.UI.ToDoItems"
+             xmlns:themes="clr-namespace:Microsoft.Windows.Themes;assembly=PresentationFramework.Aero"
+             xmlns:controls="clr-namespace:Rubberduck.UI.Controls"
+             xmlns:converters="clr-namespace:Rubberduck.UI.Converters"
+             xmlns:i="http://schemas.microsoft.com/expression/2010/interactivity"
+             x:Class="Rubberduck.UI.ToDoItems.ToDoExplorerControl"
+             Language="{UICulture}"
+             mc:Ignorable="d" 
+             d:DesignHeight="300" d:DesignWidth="400" 
+             d:DataContext="{d:DesignInstance {x:Type toDoItems:ToDoExplorerViewModel}, IsDesignTimeCreatable=False}">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="../Styles/DefaultStyle.xaml"/>
+                <ResourceDictionary Source="../Controls/Toolbar.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            
+            <BitmapImage x:Key="RefreshImage" UriSource="pack://application:,,,/Rubberduck.Resources;component/Icons/Fugue/arrow-circle-double.png" />
+            <BitmapImage x:Key="DeleteImage" UriSource="pack://application:,,,/Rubberduck.Resources;component/Icons/Fugue/todo-completed.png" />
+            <BitmapImage x:Key="GroupByMarkerImage" UriSource="pack://application:,,,/Rubberduck.Resources;component/Icons/Fugue/sticky-note-pin.png" />
+            <BitmapImage x:Key="GroupByLocationImage" UriSource="pack://application:,,,/Rubberduck.Resources;component/Icons/Custom/PNG/ObjectClass.png" />
+            <BitmapImage x:Key="SettingsImage" UriSource="pack://application:,,,/Rubberduck.Resources;component/Icons/Fugue/gear.png" />
+            <BitmapImage x:Key="CopyResultsImage" UriSource="pack://application:,,,/Rubberduck.Resources;component/Icons/Fugue/document-copy.png" />
+            <BitmapImage x:Key="ExpandAllImage" UriSource="pack://application:,,,/Rubberduck.Resources;component/Icons/Fugue/expand-all.png" />
+            <BitmapImage x:Key="CollapseAllImage" UriSource="pack://application:,,,/Rubberduck.Resources;component/Icons/Fugue/collapse-all.png" />
+        </ResourceDictionary>
+    </UserControl.Resources>
+    
+    <Grid>
+        
+        <Grid.RowDefinitions>
+            <RowDefinition Height="30"/>
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        
+        <ToolBarTray Grid.Row="0" IsLocked="True">
+            <ToolBar Style="{DynamicResource ToolBarWithOverflowOnlyShowingWhenNeededStyle}">
+                <ToolBar.Resources>
+                    <converters:ToDoItemGroupingToBooleanConverter x:Key="GroupByLocationConverter" />
+                    <converters:ToDoItemGroupingToBooleanConverter x:Key="GroupByMarkerConverter" />
+                    
+                    <Style TargetType="Image">
+                        <Setter Property="Height" Value="16" />
+                    </Style>
+                </ToolBar.Resources>
+
+                <Button ToolTip="{Resx ResxName=Rubberduck.Resources.RubberduckUI, Key=Refresh}" Command="{Binding RefreshCommand}">
+                    <Image Source="{StaticResource RefreshImage}" Style="{StaticResource ToolbarImageOpacity}"/>
+                </Button>
+
+                <Separator />
+
+                <Button ToolTip="{Resx ResxName=Rubberduck.Resources.RubberduckUI, Key=Remove}" Command="{Binding RemoveCommand}">
+                    <Image Source="{StaticResource DeleteImage}" Style="{StaticResource ToolbarImageOpacity}" />
+                </Button>
+
+                <Separator />
+
+                <Label Content="{Resx ResxName=Rubberduck.Resources.RubberduckUI, Key=GroupingGrid_GroupingStyle}" VerticalContentAlignment="Center" />
+
+                <ToggleButton Style="{StaticResource ToolBarToggleStyle}"
+                              ToolTip="{Resx ResxName=Rubberduck.Resources.RubberduckUI, Key=GroupingStyle_ByMarker}"
+                              IsChecked="{Binding Path=Grouping, Converter={StaticResource GroupByMarkerConverter}, ConverterParameter={x:Static toDoItems:ToDoItemGrouping.Marker}}">
+                    <Image Source="{StaticResource GroupByMarkerImage}" />
+                </ToggleButton>
+
+                <ToggleButton Style="{StaticResource ToolBarToggleStyle}"
+                              ToolTip="{Resx ResxName=Rubberduck.Resources.RubberduckUI, Key=GroupingStyle_ByLocation}"
+                              IsChecked="{Binding Path=Grouping, Converter={StaticResource GroupByLocationConverter}, ConverterParameter={x:Static toDoItems:ToDoItemGrouping.Location}}">
+                    <Image Source="{StaticResource GroupByLocationImage}" />
+                </ToggleButton>
+
+                <Separator />
+
+                <Button Name="CollapseAll" Command="{Binding CollapseAllCommand}"
+                        ToolTip="{Resx ResxName=Rubberduck.Resources.RubberduckUI, Key=InspectionResults_CollapseAll}">
+                    <Image Source="{StaticResource CollapseAllImage}" Style="{StaticResource ToolbarImageOpacity}" />
+                </Button>
+
+                <Button Name="ExpandAll" Command="{Binding ExpandAllCommand}"
+                        ToolTip="{Resx ResxName=Rubberduck.Resources.RubberduckUI, Key=InspectionResults_ExpandAll}">
+                    <Image Source="{StaticResource ExpandAllImage}" Style="{StaticResource ToolbarImageOpacity}" />
+                </Button>
+
+                <Separator />
+                <Button Command="{Binding CopyResultsCommand}">
+                    <Image Source="{StaticResource CopyResultsImage}" Style="{StaticResource ToolbarImageOpacity}" />
+                    <Button.ToolTip>
+                        <TextBlock Text="{Resx ResxName=Rubberduck.Resources.ToDoExplorer.ToDoExplorerUI, Key=ToDoExplorer_CopyToolTip}" />
+                    </Button.ToolTip>
+                </Button>
+                <Separator />
+                <Button ToolTip="{Resx ResxName=Rubberduck.Resources.RubberduckUI, Key=Settings}" Command="{Binding OpenTodoSettingsCommand}">
+                    <Image Source="{StaticResource SettingsImage}" Style="{StaticResource ToolbarImageOpacity}" />
+                </Button>
+            </ToolBar>
+        </ToolBarTray>
+
+        <controls:GroupingGrid x:Name="MainGrid"
+                               Grid.Row="1" 
+                               ShowGroupingItemCount="True"
+                               ItemsSource="{Binding Items, NotifyOnSourceUpdated=True}"
+			                   SelectedItem="{Binding SelectedItem}"
+                               SelectionUnit="FullRow"
+                               InitialExpandedState="True"
+                               CanUserReorderColumns="True"
+                               ColumnReordered="GroupingGrid_ColumnReordered">
+            <controls:GroupingGrid.Columns>
+                <DataGridTextColumn Header="{Resx ResxName=Rubberduck.Resources.ToDoExplorer.ToDoExplorerUI, Key=TodoExplorer_Description}" Binding="{Binding Description, Mode=OneTime}" Width="*"
+                                    DisplayIndex="{Binding DescriptionColumnIndex, Mode=TwoWay, FallbackValue=0}" />
+                <DataGridTextColumn Header="{Resx ResxName=Rubberduck.Resources.RubberduckUI, Key=ProjectName}" Binding="{Binding Selection.QualifiedName.ProjectName, Mode=OneTime}" Width="75"
+                                    DisplayIndex="{Binding ProjectColumnIndex, Mode=TwoWay, FallbackValue=1}" />
+                <DataGridTextColumn Header="{Resx ResxName=Rubberduck.Resources.RubberduckUI, Key=ModuleName}" Binding="{Binding Selection.QualifiedName.ComponentName, Mode=OneTime}" Width="75"
+                                    DisplayIndex="{Binding ComponentColumnIndex, Mode=TwoWay, FallbackValue=2}" />
+                <DataGridTextColumn Header="{Resx ResxName=Rubberduck.Resources.ToDoExplorer.ToDoExplorerUI, Key=TodoExplorer_LineNumber}" Binding="{Binding Selection.Selection.StartLine, Mode=OneTime}" Width="75"
+                                    DisplayIndex="{Binding LineNumberColumnIndex, Mode=TwoWay, FallbackValue=3}" />
+            </controls:GroupingGrid.Columns>
+            <i:Interaction.Behaviors>
+                <controls:GroupItemExpandedBehavior ExpandedState="{Binding ExpandedState, Mode=TwoWay}" />
+            </i:Interaction.Behaviors>
+        </controls:GroupingGrid>
+    </Grid>
+</UserControl>
+

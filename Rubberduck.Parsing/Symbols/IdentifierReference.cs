@@ -12,7 +12,7 @@ namespace Rubberduck.Parsing.Symbols
     [DebuggerDisplay("({IdentifierName}) IsAss:{IsAssignment} | {Selection} ")]
     public class IdentifierReference : IEquatable<IdentifierReference>
     {
-        public IdentifierReference(
+        internal IdentifierReference(
             QualifiedModuleName qualifiedName, 
             Declaration parentScopingDeclaration, 
             Declaration parentNonScopingDeclaration, 
@@ -22,69 +22,73 @@ namespace Rubberduck.Parsing.Symbols
             Declaration declaration, 
             bool isAssignmentTarget = false,
             bool hasExplicitLetStatement = false, 
-            IEnumerable<IAnnotation> annotations = null)
+            IEnumerable<IParseTreeAnnotation> annotations = null,
+            bool isSetAssigned = false,
+            bool isIndexedDefaultMemberAccess = false,
+            bool isNonIndexedDefaultMemberAccess = false,
+            int defaultMemberRecursionDepth = 0,
+            bool isArrayAccess = false,
+            bool isProcedureCoercion = false,
+            bool isInnerRecursiveDefaultMemberAccess = false)
         {
-            _parentScopingDeclaration = parentScopingDeclaration;
-            _parentNonScopingDeclaration = parentNonScopingDeclaration;
-            _qualifiedName = qualifiedName;
-            _identifierName = identifierName;
-            _selection = selection;
-            _context = context;
-            _declaration = declaration;
-            _hasExplicitLetStatement = hasExplicitLetStatement;
-            _isAssignmentTarget = isAssignmentTarget;
-            _annotations = annotations ?? new List<IAnnotation>();
+            ParentScoping = parentScopingDeclaration;
+            ParentNonScoping = parentNonScopingDeclaration;
+            QualifiedSelection = new QualifiedSelection(qualifiedName, selection);
+            IdentifierName = identifierName;
+            Context = context;
+            Declaration = declaration;
+            HasExplicitLetStatement = hasExplicitLetStatement;
+            IsAssignment = isAssignmentTarget;
+            IsSetAssignment = isSetAssigned;
+            IsIndexedDefaultMemberAccess = isIndexedDefaultMemberAccess;
+            IsNonIndexedDefaultMemberAccess = isNonIndexedDefaultMemberAccess;
+            DefaultMemberRecursionDepth = defaultMemberRecursionDepth;
+            IsArrayAccess = isArrayAccess;
+            IsProcedureCoercion = isProcedureCoercion;
+            Annotations = annotations ?? new List<IParseTreeAnnotation>();
+            IsInnerRecursiveDefaultMemberAccess = isInnerRecursiveDefaultMemberAccess;
         }
 
-        private readonly QualifiedModuleName _qualifiedName;
-        public QualifiedModuleName QualifiedModuleName { get { return _qualifiedName; } }
+        public QualifiedSelection QualifiedSelection { get; }
+        public QualifiedModuleName QualifiedModuleName => QualifiedSelection.QualifiedName;
+        public Selection Selection => QualifiedSelection.Selection;
 
-        private readonly string _identifierName;
-        public string IdentifierName { get { return _identifierName; } }
+        public string IdentifierName { get; }
 
-        private readonly Selection _selection;
-        public Selection Selection { get { return _selection; } }
-
-        private readonly Declaration _parentScopingDeclaration;
         /// <summary>
         /// Gets the scoping <see cref="Declaration"/> that contains this identifier reference,
         /// e.g. a module, procedure, function or property.
         /// </summary>
-        public Declaration ParentScoping { get { return _parentScopingDeclaration; } }
+        public Declaration ParentScoping { get; }
 
-        private readonly Declaration _parentNonScopingDeclaration;
         /// <summary>
         /// Gets the non-scoping <see cref="Declaration"/> that contains this identifier reference,
         /// e.g. a user-defined or enum type. Gets the <see cref="ParentScoping"/> if not applicable.
         /// </summary>
-        public Declaration ParentNonScoping { get { return _parentNonScopingDeclaration; } }
+        public Declaration ParentNonScoping { get; }
 
-        private readonly bool _isAssignmentTarget;
-        public bool IsAssignment { get { return _isAssignmentTarget; } }
+        public bool IsAssignment { get; }
 
-        private readonly ParserRuleContext _context;
-        public ParserRuleContext Context { get { return _context; } }
+        public bool IsSetAssignment { get; }
 
-        private readonly Declaration _declaration;
-        public Declaration Declaration { get { return _declaration; } }
+        public bool IsIndexedDefaultMemberAccess { get; }
+        public bool IsNonIndexedDefaultMemberAccess { get; }
+        public bool IsDefaultMemberAccess => IsIndexedDefaultMemberAccess || IsNonIndexedDefaultMemberAccess;
+        public bool IsProcedureCoercion { get; }
+        public bool IsInnerRecursiveDefaultMemberAccess { get; }
+        public int DefaultMemberRecursionDepth { get; }
 
-        private readonly IEnumerable<IAnnotation> _annotations;
-        public IEnumerable<IAnnotation> Annotations { get { return _annotations; } }
+        public bool IsArrayAccess { get; }
 
-        public bool IsInspectionDisabled(string inspectionName)
-        {
-            return Annotations.Any(annotation =>
-                annotation.AnnotationType == AnnotationType.Ignore
-                && ((IgnoreAnnotation)annotation).IsIgnored(inspectionName));
-        }
+        public ParserRuleContext Context { get; }
 
-        private readonly bool _hasExplicitLetStatement;
-        public bool HasExplicitLetStatement { get { return _hasExplicitLetStatement; } }
+        public Declaration Declaration { get; }
 
-        public bool HasExplicitCallStatement()
-        {
-            return Context.Parent is VBAParser.CallStmtContext && ((VBAParser.CallStmtContext)Context).CALL() != null;
-        }
+        public IEnumerable<IParseTreeAnnotation> Annotations { get; }
+
+        public bool HasExplicitLetStatement { get; }
+
+        public bool HasExplicitCallStatement() => Context.Parent is VBAParser.CallStmtContext && ((VBAParser.CallStmtContext)Context).CALL() != null;
 
         private bool? _hasTypeHint;
         public bool HasTypeHint()
@@ -94,8 +98,7 @@ namespace Rubberduck.Parsing.Symbols
                 return _hasTypeHint.Value;
             }
 
-            string token;
-            return HasTypeHint(out token);
+            return HasTypeHint(out _);
         }
 
         public bool HasTypeHint(out string token)
@@ -114,8 +117,11 @@ namespace Rubberduck.Parsing.Symbols
                 return false;
             }
 
-            var hint = ((dynamic)Context.Parent).typeHint() as VBAParser.TypeHintContext;
-            token = hint == null ? null : hint.GetText();
+            var hint = Context.Parent is VBAParser.TypedIdentifierContext typedIdentifierContext
+                ? typedIdentifierContext.typeHint()
+                : null;
+
+            token = hint?.GetText();
             _hasTypeHint = hint != null;
             return _hasTypeHint.Value;
         }
@@ -131,7 +137,8 @@ namespace Rubberduck.Parsing.Symbols
             return other != null
                 && other.QualifiedModuleName.Equals(QualifiedModuleName)
                 && other.Selection.Equals(Selection)
-                && other.Declaration.Equals(Declaration);
+                && (other.Declaration != null && other.Declaration.Equals(Declaration)
+                    || other.Declaration == null && Declaration == null);
         }
 
         public override bool Equals(object obj)
@@ -141,7 +148,9 @@ namespace Rubberduck.Parsing.Symbols
 
         public override int GetHashCode()
         {
-            return HashCode.Compute(QualifiedModuleName, Selection, Declaration);
+            return Declaration != null
+                ? HashCode.Compute(QualifiedModuleName, Selection, Declaration)
+                : HashCode.Compute(QualifiedModuleName, Selection);
         }
     }
 }

@@ -1,15 +1,15 @@
-﻿using System.Linq;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.Linq;
+using NUnit.Framework;
 using Rubberduck.SmartIndenter;
 using RubberduckTests.Settings;
 
 namespace RubberduckTests.SmartIndenter
 {
-    [TestClass]
+    [TestFixture]
     public class EndOfLineCommentTests
     {
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void AbsolutePositionWorks()
         {
             var code = new[]
@@ -32,12 +32,12 @@ namespace RubberduckTests.SmartIndenter
                 s.EndOfLineCommentStyle = EndOfLineCommentStyle.Absolute;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void SameGapWorks()
         {
             var code = new[]
@@ -60,12 +60,12 @@ namespace RubberduckTests.SmartIndenter
                 s.EndOfLineCommentStyle = EndOfLineCommentStyle.SameGap;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void StandardGapWorks()
         {
             var code = new[]
@@ -89,12 +89,12 @@ namespace RubberduckTests.SmartIndenter
                 s.EndOfLineCommentStyle = EndOfLineCommentStyle.StandardGap;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void AlignInColumnWorks()
         {
             var code = new[]
@@ -117,12 +117,12 @@ namespace RubberduckTests.SmartIndenter
                 s.EndOfLineCommentStyle = EndOfLineCommentStyle.AlignInColumn;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void AlignInColumnFallsBackToOneSpace()
         {
             var code = new[]
@@ -145,12 +145,12 @@ namespace RubberduckTests.SmartIndenter
                 s.EndOfLineCommentStyle = EndOfLineCommentStyle.AlignInColumn;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void AbsoluteFallsBackToOneSpace()
         {
             var code = new[]
@@ -173,12 +173,12 @@ namespace RubberduckTests.SmartIndenter
                 s.EndOfLineCommentStyle = EndOfLineCommentStyle.Absolute;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void CommentOnlyLineIgnoresEndOfLineSetting()
         {
             var code = new[]
@@ -201,12 +201,12 @@ namespace RubberduckTests.SmartIndenter
                 s.EndOfLineCommentStyle = EndOfLineCommentStyle.AlignInColumn;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void WorksOutsideOfProcedures()
         {
             var code = new[]
@@ -219,6 +219,7 @@ namespace RubberduckTests.SmartIndenter
             var expected = new[]
             {
                 "#Const Foo = Bar                                 'Comment",
+                "",
                 "Private Sub Test()",                
                 "End Sub"
             };
@@ -229,12 +230,12 @@ namespace RubberduckTests.SmartIndenter
                 s.EndOfLineCommentStyle = EndOfLineCommentStyle.AlignInColumn;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
 
-        [TestMethod]
-        [TestCategory("Indenter")]
+        [Test]
+        [Category("Indenter")]
         public void WorksInsideEnums()
         {
             var code = new[]
@@ -259,7 +260,7 @@ namespace RubberduckTests.SmartIndenter
                 s.EndOfLineCommentStyle = EndOfLineCommentStyle.AlignInColumn;
                 return s;
             });
-            var actual = indenter.Indent(code, string.Empty);
+            var actual = indenter.Indent(code);
             Assert.IsTrue(expected.SequenceEqual(actual));
         }
     }

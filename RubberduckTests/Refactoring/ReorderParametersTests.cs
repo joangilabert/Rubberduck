@@ -1,118 +1,77 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
-using System.Windows.Forms;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using NUnit.Framework;
 using Moq;
-using Rubberduck.Parsing.VBA;
 using Rubberduck.Refactorings;
 using Rubberduck.Refactorings.ReorderParameters;
-using Rubberduck.UI;
 using Rubberduck.VBEditor;
-using Rubberduck.VBEditor.Application;
-using Rubberduck.VBEditor.Events;
 using Rubberduck.VBEditor.SafeComWrappers;
-using Rubberduck.VBEditor.SafeComWrappers.Abstract;
 using RubberduckTests.Mocks;
+using Rubberduck.Parsing.Rewriter;
+using Rubberduck.Parsing.Symbols;
+using Rubberduck.Parsing.UIContext;
+using Rubberduck.Parsing.VBA;
+using Rubberduck.Refactorings.Exceptions;
+using Rubberduck.Refactorings.Exceptions.ReorderParameters;
+using Rubberduck.UI.Refactorings.ReorderParameters;
+using Rubberduck.VBEditor.Utility;
 
 namespace RubberduckTests.Refactoring
 {
-    [TestClass]
-    public class ReorderParametersTests : VbeTestBase
+    [TestFixture]
+    public class ReorderParametersTests :InteractiveRefactoringTestBase<IReorderParametersPresenter, ReorderParametersModel>
     {
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParams_SwapPositions()
         {
             //Input
             const string inputCode =
-@"Private Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String)
+                @"Private Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String)
 End Sub";
             var selection = new Selection(1, 23, 1, 27);
 
             //Expectation
             const string expectedCode =
-@"Private Sub Foo(ByVal arg2 As String, ByVal arg1 As Integer)
+                @"Private Sub Foo(ByVal arg2 As String, ByVal arg1 As Integer)
 End Sub";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //set up model
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            var factory = SetupFactory(model);
-
-            //act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //assert
-            Assert.AreEqual(expectedCode, module.Content());
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParams_SwapPositions_SignatureContainsParamName()
         {
             //Input
             const string inputCode =
-@"Private Sub Foo(a, ba)
+                @"Private Sub Foo(a, ba)
 End Sub";
             var selection = new Selection(1, 16, 1, 16);
 
             //Expectation
             const string expectedCode =
-@"Private Sub Foo(ba, a)
+                @"Private Sub Foo(ba, a)
 End Sub";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //set up model
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            var factory = SetupFactory(model);
-
-            //act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //assert
-            Assert.AreEqual(expectedCode, module.Content());
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParams_SwapPositions_ReferenceValueContainsOtherReferenceValue()
         {
             //Input
             const string inputCode =
-@"Private Sub Foo(a, ba)
+                @"Private Sub Foo(a, ba)
 End Sub
 
 Sub Goo()
@@ -122,188 +81,134 @@ End Sub";
 
             //Expectation
             const string expectedCode =
-@"Private Sub Foo(ba, a)
+                @"Private Sub Foo(ba, a)
 End Sub
 
 Sub Goo()
     Foo 121, 1
 End Sub";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //set up model
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            var factory = SetupFactory(model);
-
-            //act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //assert
-            Assert.AreEqual(expectedCode, module.Content());
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParams_RefactorDeclaration()
         {
             //Input
             const string inputCode =
-@"Private Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String)
+                @"Private Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String)
 End Sub";
             var selection = new Selection(1, 23, 1, 27);
 
             //Expectation
             const string expectedCode =
-@"Private Sub Foo(ByVal arg2 As String, ByVal arg1 As Integer)
+                @"Private Sub Foo(ByVal arg2 As String, ByVal arg1 As Integer)
 End Sub";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //set up model
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            var factory = SetupFactory(model);
-
-            //act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(model.TargetDeclaration);
-
-            //assert
-            Assert.AreEqual(expectedCode, module.Content());
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParams_RefactorDeclaration_FailsInvalidTarget()
         {
             //Input
             const string inputCode =
-@"Private Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String)
+                @"Private Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String)
 End Sub";
-            var selection = new Selection(1, 23, 1, 27);
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //set up model
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            var factory = SetupFactory(model);
-
-            //act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-
-            //assert
-            try
-            {
-                refactoring.Refactor(
-                    model.Declarations.FirstOrDefault(
-                        i => i.DeclarationType == Rubberduck.Parsing.Symbols.DeclarationType.ProceduralModule));
-            }
-            catch (ArgumentException e)
-            {
-                Assert.AreEqual("Invalid declaration type", e.Message);
-                return;
-            }
-
-            Assert.Fail();
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(inputCode, "TestModule1", DeclarationType.ProceduralModule, presenterAction, typeof(InvalidDeclarationTypeException));
+            Assert.AreEqual(inputCode, actualCode);
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
+        public void ReorderParams_RefactorDeclaration_FailsNoValidTargetSelected()
+        {
+            //Input
+            const string inputCode =
+                @"Private bar As Long 
+
+Private Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String)
+End Sub";
+            var selection = Selection.Home;
+
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction, typeof(NoDeclarationForSelectionException));
+            Assert.AreEqual(inputCode, actualCode);
+        }
+
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParams_WithOptionalParam()
         {
             //Input
             const string inputCode =
-@"Private Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String, Optional ByVal arg3 As Boolean = True)
+                @"Private Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String, Optional ByVal arg3 As Boolean = True)
 End Sub";
             var selection = new Selection(1, 23, 1, 27);
 
             //Expectation
             const string expectedCode =
-@"Private Sub Foo(ByVal arg2 As String, ByVal arg1 As Integer, Optional ByVal arg3 As Boolean = True)
+                @"Private Sub Foo(ByVal arg2 As String, ByVal arg1 As Integer, Optional ByVal arg3 As Boolean = True)
 End Sub";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //set up model
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            var reorderedParams = new List<Parameter>()
-            {
-                model.Parameters[1],
-                model.Parameters[0],
-                model.Parameters[2]
-            };
-
-            model.Parameters = reorderedParams;
-
-            var factory = SetupFactory(model);
-
-            //act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //assert
-            Assert.AreEqual(expectedCode, module.Content());
+            var presenterAction = ReorderParamIndices(new List<int>{1, 0, 2});
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
         }
 
-        [TestMethod]
-        public void ReorderParams_SwapPositions_UpdatesCallers()
-         {
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
+        public void ReorderParametersRefactoring_WithOptionalParams_RemovedTrailingMissingArguments()
+        {
             //Input
             const string inputCode =
-@"Private Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String)
+                @"Public Sub Foo(Optional ByVal arg1 As Integer = 0, Optional ByVal arg2 As String = vbNullString, Optional ByVal arg3 As Long = 0)
+End Sub
+
+Public Sub Goo()
+    Foo ,, 6
+    Foo , 4, 6
+End Sub
+";
+            var selection = new Selection(1, 23, 1, 27);
+
+            //Expectation
+            const string expectedCode =
+                @"Public Sub Foo(Optional ByVal arg3 As Long = 0, Optional ByVal arg2 As String = vbNullString, Optional ByVal arg1 As Integer = 0)
+End Sub
+
+Public Sub Goo()
+    Foo 6
+    Foo 6, 4
+End Sub
+";
+
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
+        }
+
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
+        public void ReorderParams_SwapPositions_UpdatesCallers()
+        {
+            //Input
+            const string inputCode =
+                @"Private Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String)
 End Sub
 
 Private Sub Bar()
@@ -314,7 +219,7 @@ End Sub
 
             //Expectation
             const string expectedCode =
-@"Private Sub Foo(ByVal arg2 As String, ByVal arg1 As Integer)
+                @"Private Sub Foo(ByVal arg2 As String, ByVal arg1 As Integer)
 End Sub
 
 Private Sub Bar()
@@ -322,41 +227,19 @@ Private Sub Bar()
 End Sub
 ";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //set up model
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            var factory = SetupFactory(model);
-
-            //act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //assert
-            Assert.AreEqual(expectedCode, module.Content());
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void RemoveParametersRefactoring_ClientReferencesAreUpdated_ParensAroundCall()
         {
             //Input
             const string inputCode =
-@"Private Sub bar()
+                @"Private Sub bar()
     Dim x As Integer
     Dim y As Integer
     y = foo(x, 42)
@@ -371,7 +254,7 @@ End Function";
 
             //Expectation
             const string expectedCode =
-@"Private Sub bar()
+                @"Private Sub bar()
     Dim x As Integer
     Dim y As Integer
     y = foo(42, x)
@@ -383,41 +266,19 @@ Private Function foo(ByVal b As Integer, ByRef a As Integer) As Integer
     foo = a + b
 End Function";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //set up model
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            var factory = SetupFactory(model);
-
-            //act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //assert
-            Assert.AreEqual(expectedCode, module.Content());
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
         }
 
-        [TestMethod]
-        public void ReorderParametersRefactoring_ReorderNamedParams()
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
+        public void ReorderParametersRefactoring_DoesNotReorderNamedArguments()
         {
             //Input
             const string inputCode =
-@"Public Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String, ByVal arg3 As Double)
+                @"Public Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String, ByVal arg3 As Double)
 End Sub
 
 Public Sub Goo()
@@ -428,103 +289,81 @@ End Sub
 
             //Expectation
             const string expectedCode =
-@"Public Sub Foo(ByVal arg1 As Integer, ByVal arg3 As Double, ByVal arg2 As String)
+                @"Public Sub Foo(ByVal arg1 As Integer, ByVal arg3 As Double, ByVal arg2 As String)
 End Sub
 
 Public Sub Goo()
-    Foo arg2:=""test44"", arg1:=3, arg3:=6.1
+    Foo arg2:=""test44"", arg3:=6.1, arg1:=3
 End Sub
 ";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //Specify Params to reorder
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            var reorderedParams = new List<Parameter>()
-            {
-                model.Parameters[0],
-                model.Parameters[2],
-                model.Parameters[1]
-            };
-
-            model.Parameters = reorderedParams;
-
-            //SetupFactory
-            var factory = SetupFactory(model);
-
-            //Act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //Assert
-            Assert.AreEqual(expectedCode, module.Content());
+            var presenterAction = ReorderParamIndices(new List<int>{0, 2, 1});
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
         }
 
-        [TestMethod]
-        public void ReorderParametersRefactoring_ReorderNamedParams_Function()
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
+        public void ReorderParametersRefactoring_MakesPartiallyNamedArgumentsAllNamed()
         {
             //Input
             const string inputCode =
-@"Public Function Foo(ByVal arg1 As Integer, ByVal arg2 As String) As Boolean
+                @"Public Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String, ByVal arg3 As Double, ByVal arg4 As Double)
+End Sub
+
+Public Sub Goo()
+    Foo 23, ""test42"", arg4:=6.1, arg3:=3
+End Sub
+";
+            var selection = new Selection(1, 23, 1, 27);
+
+            //Expectation
+            const string expectedCode =
+                @"Public Sub Foo(ByVal arg4 As Double, ByVal arg1 As Integer, ByVal arg2 As String, ByVal arg3 As Double)
+End Sub
+
+Public Sub Goo()
+    Foo arg1:=23, arg2:=""test42"", arg4:=6.1, arg3:=3
+End Sub
+";
+
+            var presenterAction = ReorderParamIndices(new List<int> { 3, 0, 1, 2 });
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
+        }
+
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
+        public void ReorderParametersRefactoring_DoesNotReorderNamedArguments_Function()
+        {
+            //Input
+            const string inputCode =
+                @"Public Function Foo(ByVal arg1 As Integer, ByVal arg2 As String) As Boolean
     Foo = True
 End Function";
             var selection = new Selection(1, 23, 1, 27);
 
             //Expectation
             const string expectedCode =
-@"Public Function Foo(ByVal arg2 As String, ByVal arg1 As Integer) As Boolean
+                @"Public Function Foo(ByVal arg2 As String, ByVal arg1 As Integer) As Boolean
     Foo = True
 End Function";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //Specify Params to reorder
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            //SetupFactory
-            var factory = SetupFactory(model);
-
-            //Act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //Assert
-            Assert.AreEqual(expectedCode, module.Content());
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
         }
 
-        [TestMethod]
-        public void ReorderParametersRefactoring_ReorderNamedParams_WithOptionalParam()
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
+        public void ReorderParametersRefactoring_DoesNotReorderNamedArguments_WithOptionalParam()
         {
             //Input
             const string inputCode =
-@"Public Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String, Optional ByVal arg3 As Double)
+                @"Public Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String, Optional ByVal arg3 As Double)
 End Sub
 
 Public Sub Goo()
@@ -535,252 +374,167 @@ End Sub
 
             //Expectation
             const string expectedCode =
-@"Public Sub Foo(ByVal arg2 As String, ByVal arg1 As Integer, Optional ByVal arg3 As Double)
+                @"Public Sub Foo(ByVal arg2 As String, ByVal arg1 As Integer, Optional ByVal arg3 As Double)
 End Sub
 
 Public Sub Goo()
-    Foo arg1:=3, arg2:=""test44""
+    Foo arg2:=""test44"", arg1:=3
 End Sub
 ";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //Specify Params to reorder
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            var reorderedParams = new List<Parameter>()
-            {
-                model.Parameters[1],
-                model.Parameters[0],
-                model.Parameters[2]
-            };
-
-            model.Parameters = reorderedParams;
-
-            //SetupFactory
-            var factory = SetupFactory(model);
-
-            //Act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //Assert
-            Assert.AreEqual(expectedCode, module.Content());
+            var presenterAction = ReorderParamIndices(new List<int>{1, 0, 2});
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
+        public void ReorderParametersRefactoring_MakesPartiallyNamedArgumentsAllNamedAndDropsMissingOptionalArguments()
+        {
+            //Input
+            const string inputCode =
+                @"Public Sub Foo(Optional ByVal arg1 As Integer = 2, Optional ByVal arg2 As String = vbNullString, Optional ByVal arg3 As Double = 1, Optional ByVal arg4 As Double = 0)
+End Sub
+
+Public Sub Goo()
+    Foo 23, , arg4:=6.1, arg3:=3
+End Sub
+";
+            var selection = new Selection(1, 23, 1, 27);
+
+            //Expectation
+            const string expectedCode =
+                @"Public Sub Foo(Optional ByVal arg4 As Double = 0, Optional ByVal arg1 As Integer = 2, Optional ByVal arg2 As String = vbNullString, Optional ByVal arg3 As Double = 1)
+End Sub
+
+Public Sub Goo()
+    Foo arg1:=23, arg4:=6.1, arg3:=3
+End Sub
+";
+
+            var presenterAction = ReorderParamIndices(new List<int> { 3, 0, 1, 2 });
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
+        }
+
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParametersRefactoring_ReorderGetter()
         {
             //Input
             const string inputCode =
-@"Private Property Get Foo(ByVal arg1 As Integer, ByVal arg2 As String, ByVal arg3 As Date) As Boolean
+                @"Private Property Get Foo(ByVal arg1 As Integer, ByVal arg2 As String, ByVal arg3 As Date) As Boolean
 End Property";
             var selection = new Selection(1, 23, 1, 27);
 
             //Expectation
             const string expectedCode =
-@"Private Property Get Foo(ByVal arg2 As String, ByVal arg3 As Date, ByVal arg1 As Integer) As Boolean
+                @"Private Property Get Foo(ByVal arg2 As String, ByVal arg3 As Date, ByVal arg1 As Integer) As Boolean
 End Property";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //Specify Params to reorder
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            var reorderedParams = new List<Parameter>()
-            {
-                model.Parameters[1],
-                model.Parameters[2],
-                model.Parameters[0]
-            };
-
-            model.Parameters = reorderedParams;
-
-            //SetupFactory
-            var factory = SetupFactory(model);
-
-            //Act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //Assert
-            Assert.AreEqual(expectedCode, module.Content());
+            var presenterAction = ReorderParamIndices(new List<int> { 1, 2, 0 });
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParametersRefactoring_ReorderLetter()
         {
             //Input
             const string inputCode =
-@"Private Property Let Foo(ByVal arg1 As Integer, ByVal arg2 As String, ByVal arg3 As Date) 
+                @"Private Property Let Foo(ByVal arg1 As Integer, ByVal arg2 As String, ByVal arg3 As Date)
 End Property";
             var selection = new Selection(1, 23, 1, 27);
 
             //Expectation
             const string expectedCode =
-@"Private Property Let Foo(ByVal arg2 As String, ByVal arg1 As Integer, ByVal arg3 As Date)
+                @"Private Property Let Foo(ByVal arg2 As String, ByVal arg1 As Integer, ByVal arg3 As Date)
 End Property";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //Specify Params to reorder
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            //SetupFactory
-            var factory = SetupFactory(model);
-
-            //Act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //Assert
-            Assert.AreEqual(expectedCode, module.Content());
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParametersRefactoring_ReorderSetter()
         {
             //Input
             const string inputCode =
-@"Private Property Set Foo(ByVal arg1 As Integer, ByVal arg2 As String, ByVal arg3 As Date) 
+                @"Private Property Set Foo(ByVal arg1 As Integer, ByVal arg2 As String, ByVal arg3 As Date)
 End Property";
             var selection = new Selection(1, 23, 1, 27);
 
             //Expectation
             const string expectedCode =
-@"Private Property Set Foo(ByVal arg2 As String, ByVal arg1 As Integer, ByVal arg3 As Date)
+                @"Private Property Set Foo(ByVal arg2 As String, ByVal arg1 As Integer, ByVal arg3 As Date)
 End Property";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //Specify Params to reorder
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            //SetupFactory
-            var factory = SetupFactory(model);
-
-            //Act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //Assert
-            Assert.AreEqual(expectedCode, module.Content());
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParametersRefactoring_ReorderLastParamFromSetter_NotAllowed()
         {
             //Input
             const string inputCode =
-@"Private Property Set Foo(ByVal arg1 As Integer, ByVal arg2 As String) 
+                @"Private Property Set Foo(ByVal arg1 As Integer, ByVal arg2 As String) 
 End Property";
             var selection = new Selection(1, 23, 1, 27);
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
+            ReorderParametersModel capturedModel = null;
+            Func<ReorderParametersModel, ReorderParametersModel> presenterAction = model =>
+            {
+                capturedModel = model;
+                return model;
+            };
 
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
+            RefactoredCode(inputCode, selection, presenterAction);
 
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-
-            // Assert
-            Assert.AreEqual(1, model.Parameters.Count); // doesn't allow removing last param from setter
+            Assert.AreEqual(1, capturedModel.Parameters.Count); // doesn't allow removing last param from setter
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParametersRefactoring_ReorderLastParamFromLetter_NotAllowed()
         {
             //Input
             const string inputCode =
-@"Private Property Let Foo(ByVal arg1 As Integer, ByVal arg2 As String) 
+                @"Private Property Let Foo(ByVal arg1 As Integer, ByVal arg2 As String) 
 End Property";
             var selection = new Selection(1, 23, 1, 27);
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
+            ReorderParametersModel capturedModel = null;
+            Func<ReorderParametersModel, ReorderParametersModel> presenterAction = model =>
+            {
+                capturedModel = model;
+                return model;
+            };
 
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
+            RefactoredCode(inputCode, selection, presenterAction);
 
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-
-            // Assert
-            Assert.AreEqual(1, model.Parameters.Count); // doesn't allow removing last param from letter
+            Assert.AreEqual(1, capturedModel.Parameters.Count); // doesn't allow removing last param from setter
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParametersRefactoring_SignatureOnMultipleLines()
         {
             //Input
             const string inputCode =
-@"Private Sub Foo(ByVal arg1 As Integer, _
+                @"Private Sub Foo(ByVal arg1 As Integer, _
                   ByVal arg2 As String, _
                   ByVal arg3 As Date)
 End Sub";
@@ -788,45 +542,24 @@ End Sub";
 
             //Expectation
             const string expectedCode =
-@"Private Sub Foo(ByVal arg3 As Date, ByVal arg2 As String, ByVal arg1 As Integer)
+                @"Private Sub Foo(ByVal arg3 As Date, _
+                  ByVal arg2 As String, _
+                  ByVal arg1 As Integer)
 End Sub";   // note: IDE removes excess spaces
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //Specify Params to reorder
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            //SetupFactory
-            var factory = SetupFactory(model);
-
-            //Act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //Assert
-            Assert.AreEqual(expectedCode, module.Content());
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParametersRefactoring_CallOnMultipleLines()
         {
             //Input
             const string inputCode =
-@"Private Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String, ByVal arg3 As Date)
+                @"Private Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String, ByVal arg3 As Date)
 End Sub
 
 Private Sub Goo(ByVal arg1 as Integer, ByVal arg2 As String, ByVal arg3 As Date)
@@ -841,52 +574,31 @@ End Sub
 
             //Expectation
             const string expectedCode =
-@"Private Sub Foo(ByVal arg3 As Date, ByVal arg2 As String, ByVal arg1 As Integer)
+                @"Private Sub Foo(ByVal arg3 As Date, ByVal arg2 As String, ByVal arg1 As Integer)
 End Sub
 
 Private Sub Goo(ByVal arg1 as Integer, ByVal arg2 As String, ByVal arg3 As Date)
 
-    Foo arg3, arg2, arg1
+    Foo arg3, _
+        arg2, _
+        arg1
 
 End Sub
 ";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //Specify Params to reorder
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            //SetupFactory
-            var factory = SetupFactory(model);
-
-            //Act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //Assert
-            Assert.AreEqual(expectedCode, module.Content());
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
         }
 
-        [TestMethod]
-        public void ReorderParametersRefactoring_ClientReferencesAreNotUpdated_ParamArray()
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
+        public void ReorderParametersRefactoring_ParamArrayBeforeOtherArgument_CannotConfirmDialog()
         {
             //Input
             const string inputCode =
-@"Sub Foo(ByVal arg1 As String, ParamArray arg2())
+                @"Sub Foo(ByVal arg1 As String, ParamArray arg2())
 End Sub
 
 Public Sub Goo(ByVal arg1 As Integer, _
@@ -901,45 +613,28 @@ End Sub
 ";
             var selection = new Selection(1, 23, 1, 27);
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
+            ReorderParametersModel capturedModel = null;
+            Func<ReorderParametersModel, ReorderParametersModel> presenterAction = model =>
+            {
+                capturedModel = model;
+                return ReverseParameters()(model);
+            };
+            RefactoredCode(inputCode, selection, presenterAction);
 
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
+            var declarationFinderProvider = new Mock<IDeclarationFinderProvider>().Object;
+            var viewModel = new ReorderParametersViewModel(declarationFinderProvider, capturedModel);
 
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //Specify Params to reorder
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            //SetupFactory
-            var factory = SetupFactory(model);
-
-            var messageBox = new Mock<IMessageBox>();
-            messageBox.Setup(m => m.Show(It.IsAny<string>(), It.IsAny<string>(), MessageBoxButtons.OK, MessageBoxIcon.Warning)).Returns(DialogResult.OK);
-
-            //Act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, messageBox.Object);
-            refactoring.Refactor(qualifiedSelection);
-
-            //Assert
-            Assert.AreEqual(inputCode, module.Content());
+            Assert.IsFalse(viewModel.OkButtonCommand.CanExecute(null));
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParametersRefactoring_ClientReferencesAreUpdated_ParamArray()
         {
             //Input
             const string inputCode =
-@"Sub Foo(ByVal arg1 As String, ByVal arg2 As Date, ParamArray arg3())
+                @"Sub Foo(ByVal arg1 As String, ByVal arg2 As Date, ParamArray arg3())
 End Sub
 
 Public Sub Goo(ByVal arg As Date, _
@@ -957,7 +652,7 @@ End Sub
 
             //Expectation
             const string expectedCode =
-@"Sub Foo(ByVal arg2 As Date, ByVal arg1 As String, ParamArray arg3())
+                @"Sub Foo(ByVal arg2 As Date, ByVal arg1 As String, ParamArray arg3())
 End Sub
 
 Public Sub Goo(ByVal arg As Date, _
@@ -972,52 +667,19 @@ Public Sub Goo(ByVal arg As Date, _
 End Sub
 ";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //Specify Params to reorder
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            var reorderedParams = new List<Parameter>
-            {
-                model.Parameters[1],
-                model.Parameters[0],
-                model.Parameters[2]
-            };
-
-            model.Parameters = reorderedParams;
-
-            //SetupFactory
-            var factory = SetupFactory(model);
-
-            var messageBox = new Mock<IMessageBox>();
-            messageBox.Setup(m => m.Show(It.IsAny<string>(), It.IsAny<string>(), MessageBoxButtons.OK, MessageBoxIcon.Warning)).Returns(DialogResult.OK);
-
-            //Act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, messageBox.Object);
-            refactoring.Refactor(qualifiedSelection);
-
-            //Assert
-            Assert.AreEqual(expectedCode, module.Content());
+            var presenterAction = ReorderParamIndices(new List<int>{1, 0, 2});
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
         }
 
-        [TestMethod]
-        public void ReorderParametersRefactoring_ClientReferencesAreUpdated_ParamArray_CallOnMultiplelines()
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
+        public void ReorderParametersRefactoring_ClientReferencesAreUpdated_ParamArray_CallOnMultipleLines()
         {
             //Input
             const string inputCode =
-@"Sub Foo(ByVal arg1 As String, ByVal arg2 As Date, ParamArray arg3())
+                @"Sub Foo(ByVal arg1 As String, ByVal arg2 As Date, ParamArray arg3())
 End Sub
 
 Public Sub Goo(ByVal arg As Date, _
@@ -1042,7 +704,7 @@ End Sub
 
             //Expectation
             const string expectedCode =
-@"Sub Foo(ByVal arg2 As Date, ByVal arg1 As String, ParamArray arg3())
+                @"Sub Foo(ByVal arg2 As Date, ByVal arg1 As String, ParamArray arg3())
 End Sub
 
 Public Sub Goo(ByVal arg As Date, _
@@ -1053,104 +715,55 @@ Public Sub Goo(ByVal arg As Date, _
                ByVal arg5 As Integer, _
                ByVal arg6 As Integer)
               
-    Foo arg, ""test"", test1x, test2x, test3x, test4x, test5x, test6x
+    Foo arg, _
+        ""test"", _
+        test1x, _
+        test2x, _
+        test3x, _
+        test4x, _
+        test5x, _
+        test6x
 End Sub
 ";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //Specify Params to reorder
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            var reorderedParams = new List<Parameter>()
-            {
-                model.Parameters[1],
-                model.Parameters[0],
-                model.Parameters[2]
-            };
-
-            model.Parameters = reorderedParams;
-
-            //SetupFactory
-            var factory = SetupFactory(model);
-
-            var messageBox = new Mock<IMessageBox>();
-            messageBox.Setup(m => m.Show(It.IsAny<string>(), It.IsAny<string>(), MessageBoxButtons.OK, MessageBoxIcon.Warning)).Returns(DialogResult.OK);
-
-            //Act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, messageBox.Object);
-            refactoring.Refactor(qualifiedSelection);
-
-            //Assert
-            Assert.AreEqual(expectedCode, module.Content());
+            var presenterAction = ReorderParamIndices(new List<int> { 1, 0, 2 });
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
         }
 
-        [TestMethod]
-        public void ReorderParams_MoveOptionalParamBeforeNonOptionalParamFails()
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
+        public void ReorderParams_MoveOptionalParamBeforeNonOptionalParam_CannotConfirmDialog()
         {
             //Input
             const string inputCode =
-@"Private Sub Foo(ByVal arg1 As Integer, Optional ByVal arg2 As String, Optional ByVal arg3 As Boolean = True)
+                @"Private Sub Foo(ByVal arg1 As Integer, Optional ByVal arg2 As String, Optional ByVal arg3 As Boolean = True)
 End Sub";
             var selection = new Selection(1, 23, 1, 27);
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //set up model
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            var reorderedParams = new List<Parameter>()
+            ReorderParametersModel capturedModel = null;
+            Func<ReorderParametersModel, ReorderParametersModel> presenterAction = model =>
             {
-                model.Parameters[1],
-                model.Parameters[2],
-                model.Parameters[0]
+                capturedModel = model;
+                return ReorderParamIndices(new List<int> {1, 2, 0})(model);
             };
+            RefactoredCode(inputCode, selection, presenterAction);
 
-            model.Parameters = reorderedParams;
+            var declarationFinderProvider = new Mock<IDeclarationFinderProvider>().Object;
+            var viewModel = new ReorderParametersViewModel(declarationFinderProvider, capturedModel);
 
-            var factory = SetupFactory(model);
-
-            var messageBox = new Mock<IMessageBox>();
-            messageBox.Setup(m => m.Show(It.IsAny<string>(), It.IsAny<string>(), MessageBoxButtons.OK, MessageBoxIcon.Warning)).Returns(DialogResult.OK);
-
-            //act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, messageBox.Object);
-            refactoring.Refactor(qualifiedSelection);
-
-            //assert
-            Assert.AreEqual(inputCode, module.Content());
+            Assert.IsFalse(viewModel.OkButtonCommand.CanExecute(null));
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParams_ReorderCallsWithoutOptionalParams()
         {
             //Input
             const string inputCode =
-@"Private Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String, Optional ByVal arg3 As Boolean = True)
+                @"Private Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String, Optional ByVal arg3 As Boolean = True)
 End Sub
 
 Private Sub Goo(ByVal arg1 As Integer, ByVal arg2 As String)
@@ -1161,7 +774,7 @@ End Sub
 
             //Expectation
             const string expectedCode =
-@"Private Sub Foo(ByVal arg2 As String, ByVal arg1 As Integer, Optional ByVal arg3 As Boolean = True)
+                @"Private Sub Foo(ByVal arg2 As String, ByVal arg1 As Integer, Optional ByVal arg3 As Boolean = True)
 End Sub
 
 Private Sub Goo(ByVal arg1 As Integer, ByVal arg2 As String)
@@ -1169,48 +782,19 @@ Private Sub Goo(ByVal arg1 As Integer, ByVal arg2 As String)
 End Sub
 ";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //set up model
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            var reorderedParams = new List<Parameter>()
-            {
-                model.Parameters[1],
-                model.Parameters[0],
-                model.Parameters[2]
-            };
-
-            model.Parameters = reorderedParams;
-
-            var factory = SetupFactory(model);
-
-            //act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //assert
-            Assert.AreEqual(expectedCode, module.Content());
+            var presenterAction = ReorderParamIndices(new List<int> { 1, 0, 2 });
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParametersRefactoring_ReorderFirstParamFromGetterAndSetter()
         {
             //Input
             const string inputCode =
-@"Private Property Get Foo(ByVal arg1 As Integer, ByVal arg2 As String)
+                @"Private Property Get Foo(ByVal arg1 As Integer, ByVal arg2 As String)
 End Property
 
 Private Property Set Foo(ByVal arg1 As Integer, ByVal arg2 As String, ByVal arg3 As Date)
@@ -1219,48 +803,25 @@ End Property";
 
             //Expectation
             const string expectedCode =
-@"Private Property Get Foo(ByVal arg2 As String, ByVal arg1 As Integer)
+                @"Private Property Get Foo(ByVal arg2 As String, ByVal arg1 As Integer)
 End Property
 
 Private Property Set Foo(ByVal arg2 As String, ByVal arg1 As Integer, ByVal arg3 As Date)
 End Property";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //Specify Param(s) to reorder
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            //SetupFactory
-            var factory = SetupFactory(model);
-
-            //Act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //Assert
-            Assert.AreEqual(expectedCode, module.Content());
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParametersRefactoring_ReorderFirstParamFromGetterAndLetter()
         {
             //Input
             const string inputCode =
-@"Private Property Get Foo(ByVal arg1 As Integer, ByVal arg2 As String)
+                @"Private Property Get Foo(ByVal arg1 As Integer, ByVal arg2 As String)
 End Property
 
 Private Property Let Foo(ByVal arg1 As Integer, ByVal arg2 As String, ByVal arg3 As Date)
@@ -1269,81 +830,56 @@ End Property";
 
             //Expectation
             const string expectedCode =
-@"Private Property Get Foo(ByVal arg2 As String, ByVal arg1 As Integer)
+                @"Private Property Get Foo(ByVal arg2 As String, ByVal arg1 As Integer)
 End Property
 
 Private Property Let Foo(ByVal arg2 As String, ByVal arg1 As Integer, ByVal arg3 As Date)
 End Property";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            //Specify Params to reorder
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            //SetupFactory
-            var factory = SetupFactory(model);
-
-            //Act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //Assert
-            Assert.AreEqual(expectedCode, module.Content());
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(inputCode, selection, presenterAction);
+            Assert.AreEqual(expectedCode, actualCode);
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParams_PresenterIsNull()
         {
             //Input
             const string inputCode =
-@"Private Sub Foo()
+                @"Private Sub Foo()
 End Sub";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component);
-            var project = vbe.Object.VBProjects[0];
-            var module = project.VBComponents[0].CodeModule;
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
+            var vbe = MockVbeBuilder.BuildFromSingleStandardModule(inputCode, out var component);
+            var (state, rewritingManager) = MockParser.CreateAndParseWithRewritingManager(vbe.Object);
+            using(state)
+            {
+                var qualifiedSelection = new QualifiedSelection(component.QualifiedModuleName, Selection.Home);
+                var factory = new Mock<IRefactoringPresenterFactory>();
+                factory.Setup(f => f.Create<IReorderParametersPresenter, ReorderParametersModel>(It.IsAny<ReorderParametersModel>()))
+                    .Returns(() => null); // resolves ambiguous method resolution
+                var selectionService = MockedSelectionService(qualifiedSelection);
 
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
+                var refactoring = TestRefactoring(rewritingManager, state, factory.Object, selectionService);
 
-            var factory = new ReorderParametersPresenterFactory(vbe.Object, null, parser.State, null);
+                Assert.Throws<InvalidRefactoringPresenterException>(() => refactoring.Refactor(qualifiedSelection));
 
-            //act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory, null);
-            refactoring.Refactor();
-
-            Assert.AreEqual(inputCode, module.Content());
+                Assert.AreEqual(inputCode, component.CodeModule.Content());
+            }
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParametersRefactoring_InterfaceParamsSwapped()
         {
             //Input
             const string inputCode1 =
-@"Public Sub DoSomething(ByVal a As Integer, ByVal b As String)
+                @"Public Sub DoSomething(ByVal a As Integer, ByVal b As String)
 End Sub";
             const string inputCode2 =
-@"Implements IClass1
+                @"Implements IClass1
 
 Private Sub IClass1_DoSomething(ByVal a As Integer, ByVal b As String)
 End Sub";
@@ -1352,59 +888,39 @@ End Sub";
 
             //Expectation
             const string expectedCode1 =
-@"Public Sub DoSomething(ByVal b As String, ByVal a As Integer)
+                @"Public Sub DoSomething(ByVal b As String, ByVal a As Integer)
 End Sub";
             const string expectedCode2 =
-@"Implements IClass1
+                @"Implements IClass1
 
 Private Sub IClass1_DoSomething(ByVal b As String, ByVal a As Integer)
 End Sub";   // note: IDE removes excess spaces
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            var project = builder.ProjectBuilder("TestProject1", ProjectProtection.Unprotected)
-                .AddComponent("IClass1", ComponentType.ClassModule, inputCode1)
-                .AddComponent("Class1", ComponentType.ClassModule, inputCode2)
-                .Build();
-            var vbe = builder.AddProject(project).Build();
-            var component = project.Object.VBComponents[0];
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(
+                "IClass1",
+                selection,
+                presenterAction,
+                null,
+                false,
+                ("IClass1", inputCode1, ComponentType.ClassModule),
+                ("Class1", inputCode2, ComponentType.ClassModule));
 
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-            var module1 = project.Object.VBComponents[0].CodeModule;
-            var module2 = project.Object.VBComponents[1].CodeModule;
-
-            //Specify Params to remove
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            //SetupFactory
-            var factory = SetupFactory(model);
-
-            //Act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //Assert
-            Assert.AreEqual(expectedCode1, module1.Content());
-            Assert.AreEqual(expectedCode2, module2.Content());
+            Assert.AreEqual(expectedCode1, actualCode["IClass1"]);
+            Assert.AreEqual(expectedCode2, actualCode["Class1"]);
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParametersRefactoring_InterfaceParamsSwapped_ParamsHaveDifferentNames()
         {
             //Input
             const string inputCode1 =
-@"Public Sub DoSomething(ByVal a As Integer, ByVal b As String)
+                @"Public Sub DoSomething(ByVal a As Integer, ByVal b As String)
 End Sub";
             const string inputCode2 =
-@"Implements IClass1
+                @"Implements IClass1
 
 Private Sub IClass1_DoSomething(ByVal v1 As Integer, ByVal v2 As String)
 End Sub";
@@ -1413,64 +929,44 @@ End Sub";
 
             //Expectation
             const string expectedCode1 =
-@"Public Sub DoSomething(ByVal b As String, ByVal a As Integer)
+                @"Public Sub DoSomething(ByVal b As String, ByVal a As Integer)
 End Sub";
             const string expectedCode2 =
-@"Implements IClass1
+                @"Implements IClass1
 
 Private Sub IClass1_DoSomething(ByVal v2 As String, ByVal v1 As Integer)
 End Sub";   // note: IDE removes excess spaces
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            var project = builder.ProjectBuilder("TestProject1", ProjectProtection.Unprotected)
-                .AddComponent("IClass1", ComponentType.ClassModule, inputCode1)
-                .AddComponent("Class1", ComponentType.ClassModule, inputCode2)
-                .Build();
-            var vbe = builder.AddProject(project).Build();
-            var component = project.Object.VBComponents[0];
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(
+                "IClass1",
+                selection,
+                presenterAction,
+                null,
+                false,
+                ("IClass1", inputCode1, ComponentType.ClassModule),
+                ("Class1", inputCode2, ComponentType.ClassModule));
 
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-            var module1 = project.Object.VBComponents[0].CodeModule;
-            var module2 = project.Object.VBComponents[1].CodeModule;
-
-            //Specify Params to remove
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            //SetupFactory
-            var factory = SetupFactory(model);
-
-            //Act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //Assert
-            Assert.AreEqual(expectedCode1, module1.Content());
-            Assert.AreEqual(expectedCode2, module2.Content());
+            Assert.AreEqual(expectedCode1, actualCode["IClass1"]);
+            Assert.AreEqual(expectedCode2, actualCode["Class1"]);
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParametersRefactoring_InterfaceParamsSwapped_ParamsHaveDifferentNames_TwoImplementations()
         {
             //Input
             const string inputCode1 =
-@"Public Sub DoSomething(ByVal a As Integer, ByVal b As String)
+                @"Public Sub DoSomething(ByVal a As Integer, ByVal b As String)
 End Sub";
             const string inputCode2 =
-@"Implements IClass1
+                @"Implements IClass1
 
 Private Sub IClass1_DoSomething(ByVal v1 As Integer, ByVal v2 As String)
 End Sub";
             const string inputCode3 =
-@"Implements IClass1
+                @"Implements IClass1
 
 Private Sub IClass1_DoSomething(ByVal i As Integer, ByVal s As String)
 End Sub";
@@ -1479,176 +975,153 @@ End Sub";
 
             //Expectation
             const string expectedCode1 =
-@"Public Sub DoSomething(ByVal b As String, ByVal a As Integer)
+                @"Public Sub DoSomething(ByVal b As String, ByVal a As Integer)
 End Sub";
             const string expectedCode2 =
-@"Implements IClass1
+                @"Implements IClass1
 
 Private Sub IClass1_DoSomething(ByVal v2 As String, ByVal v1 As Integer)
 End Sub";   // note: IDE removes excess spaces
             const string expectedCode3 =
-@"Implements IClass1
+                @"Implements IClass1
 
 Private Sub IClass1_DoSomething(ByVal s As String, ByVal i As Integer)
 End Sub";   // note: IDE removes excess spaces
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            var project = builder.ProjectBuilder("TestProject1", ProjectProtection.Unprotected)
-                .AddComponent("IClass1", ComponentType.ClassModule, inputCode1)
-                .AddComponent("Class1", ComponentType.ClassModule, inputCode2)
-                .AddComponent("Class2", ComponentType.ClassModule, inputCode3)
-                .Build();
-            var vbe = builder.AddProject(project).Build();
-            var component = project.Object.VBComponents[0];
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(
+                "IClass1",
+                selection,
+                presenterAction,
+                null,
+                false,
+                ("IClass1", inputCode1, ComponentType.ClassModule),
+                ("Class1", inputCode2, ComponentType.ClassModule),
+                ("Class2", inputCode3, ComponentType.ClassModule));
 
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-            var module1 = project.Object.VBComponents[0].CodeModule;
-            var module2 = project.Object.VBComponents[1].CodeModule;
-            var module3 = project.Object.VBComponents[2].CodeModule;
-
-            //Specify Params to remove
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            //SetupFactory
-            var factory = SetupFactory(model);
-
-            //Act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //Assert
-            Assert.AreEqual(expectedCode1, module1.Content());
-            Assert.AreEqual(expectedCode2, module2.Content());
-            Assert.AreEqual(expectedCode3, module3.Content());
+            Assert.AreEqual(expectedCode1, actualCode["IClass1"]);
+            Assert.AreEqual(expectedCode2, actualCode["Class1"]);
+            Assert.AreEqual(expectedCode3, actualCode["Class2"]);
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParametersRefactoring_InterfaceParamsSwapped_AcceptPrompt()
         {
             //Input
             const string inputCode1 =
-@"Implements IClass1
+                @"Implements IClass1
 
 Private Sub IClass1_DoSomething(ByVal a As Integer, ByVal b As String)
 End Sub";
             const string inputCode2 =
-@"Public Sub DoSomething(ByVal a As Integer, ByVal b As String)
+                @"Public Sub DoSomething(ByVal a As Integer, ByVal b As String)
 End Sub";
 
             var selection = new Selection(3, 23, 3, 27);
 
             //Expectation
             const string expectedCode1 =
-@"Implements IClass1
+                @"Implements IClass1
 
 Private Sub IClass1_DoSomething(ByVal b As String, ByVal a As Integer)
 End Sub";   // note: IDE removes excess spaces
 
             const string expectedCode2 =
-@"Public Sub DoSomething(ByVal b As String, ByVal a As Integer)
+                @"Public Sub DoSomething(ByVal b As String, ByVal a As Integer)
 End Sub";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            var project = builder.ProjectBuilder("TestProject1", ProjectProtection.Unprotected)
-                .AddComponent("Class1", ComponentType.ClassModule, inputCode1)
-                .AddComponent("IClass1", ComponentType.ClassModule, inputCode2)
-                .Build();
-            var vbe = builder.AddProject(project).Build();
-            var component = project.Object.VBComponents[0];
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(
+                "Class1",
+                selection,
+                presenterAction,
+                null,
+                false,
+                ("Class1", inputCode1, ComponentType.ClassModule),
+                ("IClass1", inputCode2, ComponentType.ClassModule));
 
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-            var module1 = project.Object.VBComponents[0].CodeModule;
-            var module2 = project.Object.VBComponents[1].CodeModule;
-
-            var messageBox = new Mock<IMessageBox>();
-            messageBox.Setup(
-                m => m.Show(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<MessageBoxButtons>(), It.IsAny<MessageBoxIcon>()))
-                .Returns(DialogResult.Yes);
-
-            //Specify Params to remove
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, messageBox.Object);
-            model.Parameters.Reverse();
-
-            //SetupFactory
-            var factory = SetupFactory(model);
-
-            //Act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //Assert
-            Assert.AreEqual(expectedCode1, module1.Content());
-            Assert.AreEqual(expectedCode2, module2.Content());
+            Assert.AreEqual(expectedCode1, actualCode["Class1"]);
+            Assert.AreEqual(expectedCode2, actualCode["IClass1"]);
         }
 
-        [TestMethod]
-        public void ReorderParametersRefactoring_ParamsSwapped_RejectPrompt()
+        [Test]
+        [Category("Refactorings")]
+        [Category("Remove Parameters")]
+        public void ReorderParametersRefactoring_InterfaceGetterParam_ImplementationLetAndSetParamReordered()
         {
             //Input
-            const string inputCode1 =
-@"Implements IClass1
+            const string interfaceCode =
+                @"Public Property Get Foo(ByVal a As Integer, ByVal b As String) As Variant
+End Property
 
-Private Sub IClass1_DoSomething(ByVal a As Integer, ByVal b As String)
-End Sub";
-            const string inputCode2 =
-@"Public Sub DoSomething(ByVal a As Integer, ByVal b As String)
-End Sub";
+Public Property Let Foo(ByVal a As Integer, ByVal b As String, RHS As Variant)
+End Property
 
-            var selection = new Selection(3, 23, 3, 27);
+Public Property Set Foo(ByVal a As Integer, ByVal b As String, RHS As Variant)
+End Property";
+            const string implementerCode =
+                @"Implements IClass1
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            var project = builder.ProjectBuilder("TestProject1", ProjectProtection.Unprotected)
-                .AddComponent("Class1", ComponentType.ClassModule, inputCode1)
-                .AddComponent("IClass1", ComponentType.ClassModule, inputCode2)
-                .Build();
-            var vbe = builder.AddProject(project).Build();
-            var component = project.Object.VBComponents[0];
+Private Property Get IClass1_Foo(ByVal a As Integer, ByVal b As String) As Variant
+End Property
 
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
+Private Property Let IClass1_Foo(ByVal a As Integer, ByVal b As String, RHS As Variant)
+End Property
 
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
+Private Property Set IClass1_Foo(ByVal a As Integer, ByVal b As String, RHS As Variant)
+End Property";
 
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
+            var selection = new Selection(1, 23, 1, 27);
 
-            var messageBox = new Mock<IMessageBox>();
-            messageBox.Setup(m => m.Show(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<MessageBoxButtons>(), It.IsAny<MessageBoxIcon>()))
-                      .Returns(DialogResult.No);
+            //Expectation
+            const string expectedInterfaceCode =
+                @"Public Property Get Foo(ByVal b As String, ByVal a As Integer) As Variant
+End Property
 
-            //Specify Params to remove
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, messageBox.Object);
-            Assert.IsNull(model.TargetDeclaration);
+Public Property Let Foo(ByVal b As String, ByVal a As Integer, RHS As Variant)
+End Property
+
+Public Property Set Foo(ByVal b As String, ByVal a As Integer, RHS As Variant)
+End Property";
+            const string expectedImplementerCode =
+                @"Implements IClass1
+
+Private Property Get IClass1_Foo(ByVal b As String, ByVal a As Integer) As Variant
+End Property
+
+Private Property Let IClass1_Foo(ByVal b As String, ByVal a As Integer, RHS As Variant)
+End Property
+
+Private Property Set IClass1_Foo(ByVal b As String, ByVal a As Integer, RHS As Variant)
+End Property";
+
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(
+                "IClass1",
+                selection,
+                presenterAction,
+                null,
+                false,
+                ("IClass1", interfaceCode, ComponentType.ClassModule),
+                ("Class1", implementerCode, ComponentType.ClassModule));
+
+            Assert.AreEqual(expectedInterfaceCode, actualCode["IClass1"]);
+            Assert.AreEqual(expectedImplementerCode, actualCode["Class1"]);
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParametersRefactoring_EventParamsSwapped()
         {
             //Input
             const string inputCode1 =
-@"Public Event Foo(ByVal arg1 As Integer, ByVal arg2 As String)";
+                @"Public Event Foo(ByVal arg1 As Integer, ByVal arg2 As String)";
 
             const string inputCode2 =
-@"Private WithEvents abc As Class1
+                @"Private WithEvents abc As Class1
 
 Private Sub abc_Foo(ByVal arg1 As Integer, ByVal arg2 As String)
 End Sub";
@@ -1657,120 +1130,80 @@ End Sub";
 
             //Expectation
             const string expectedCode1 =
-@"Public Event Foo(ByVal arg2 As String, ByVal arg1 As Integer)";
+                @"Public Event Foo(ByVal arg2 As String, ByVal arg1 As Integer)";
 
             const string expectedCode2 =
-@"Private WithEvents abc As Class1
+                @"Private WithEvents abc As Class1
 
 Private Sub abc_Foo(ByVal arg2 As String, ByVal arg1 As Integer)
 End Sub";   // note: IDE removes excess spaces
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            var project = builder.ProjectBuilder("TestProject1", ProjectProtection.Unprotected)
-                .AddComponent("Class1", ComponentType.ClassModule, inputCode1)
-                .AddComponent("Class2", ComponentType.ClassModule, inputCode2)
-                .Build();
-            var vbe = builder.AddProject(project).Build();
-            var component = project.Object.VBComponents[0];
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(
+                "Class1",
+                selection,
+                presenterAction,
+                null,
+                false,
+                ("Class1", inputCode1, ComponentType.ClassModule),
+                ("Class2", inputCode2, ComponentType.ClassModule));
 
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-            var module1 = project.Object.VBComponents[0].CodeModule;
-            var module2 = project.Object.VBComponents[1].CodeModule;
-
-            //Specify Params to remove
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            //SetupFactory
-            var factory = SetupFactory(model);
-
-            //Act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //Assert
-            Assert.AreEqual(expectedCode1, module1.Content());
-            Assert.AreEqual(expectedCode2, module2.Content());
+            Assert.AreEqual(expectedCode1, actualCode["Class1"]);
+            Assert.AreEqual(expectedCode2, actualCode["Class2"]);
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParametersRefactoring_EventParamsSwapped_EventImplementationSelected()
         {
             //Input
             const string inputCode1 =
-@"Private WithEvents abc As Class2
+                @"Private WithEvents abc As Class2
 
 Private Sub abc_Foo(ByVal arg1 As Integer, ByVal arg2 As String)
 End Sub";
 
             const string inputCode2 =
-@"Public Event Foo(ByVal arg1 As Integer, ByVal arg2 As String)";
+                @"Public Event Foo(ByVal arg1 As Integer, ByVal arg2 As String)";
 
             var selection = new Selection(3, 15, 3, 15);
 
             //Expectation
             const string expectedCode1 =
-@"Private WithEvents abc As Class2
+                @"Private WithEvents abc As Class2
 
 Private Sub abc_Foo(ByVal arg2 As String, ByVal arg1 As Integer)
 End Sub";   // note: IDE removes excess spaces
 
             const string expectedCode2 =
-@"Public Event Foo(ByVal arg2 As String, ByVal arg1 As Integer)";
+                @"Public Event Foo(ByVal arg2 As String, ByVal arg1 As Integer)";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            var project = builder.ProjectBuilder("TestProject1", ProjectProtection.Unprotected)
-                .AddComponent("Class1", ComponentType.ClassModule, inputCode1)
-                .AddComponent("Class2", ComponentType.ClassModule, inputCode2)
-                .Build();
-            var vbe = builder.AddProject(project).Build();
-            var component = project.Object.VBComponents[0];
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(
+                "Class1",
+                selection,
+                presenterAction,
+                null,
+                false,
+                ("Class1", inputCode1, ComponentType.ClassModule),
+                ("Class2", inputCode2, ComponentType.ClassModule));
 
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-            var module1 = project.Object.VBComponents[0].CodeModule;
-            var module2 = project.Object.VBComponents[1].CodeModule;
-
-            //Specify Params to remove
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            //SetupFactory
-            var factory = SetupFactory(model);
-
-            //Act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //Assert
-            Assert.AreEqual(expectedCode1, module1.Content());
-            Assert.AreEqual(expectedCode2, module2.Content());
+            Assert.AreEqual(expectedCode1, actualCode["Class1"]);
+            Assert.AreEqual(expectedCode2, actualCode["Class2"]);
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParametersRefactoring_EventParamsSwapped_DifferentParamNames()
         {
             //Input
             const string inputCode1 =
-@"Public Event Foo(ByVal arg1 As Integer, ByVal arg2 As String)";
+                @"Public Event Foo(ByVal arg1 As Integer, ByVal arg2 As String)";
 
             const string inputCode2 =
-@"Private WithEvents abc As Class1
+                @"Private WithEvents abc As Class1
 
 Private Sub abc_Foo(ByVal i As Integer, ByVal s As String)
 End Sub";
@@ -1779,64 +1212,44 @@ End Sub";
 
             //Expectation
             const string expectedCode1 =
-@"Public Event Foo(ByVal arg2 As String, ByVal arg1 As Integer)";
+                @"Public Event Foo(ByVal arg2 As String, ByVal arg1 As Integer)";
 
             const string expectedCode2 =
-@"Private WithEvents abc As Class1
+                @"Private WithEvents abc As Class1
 
 Private Sub abc_Foo(ByVal s As String, ByVal i As Integer)
 End Sub";   // note: IDE removes excess spaces
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            var project = builder.ProjectBuilder("TestProject1", ProjectProtection.Unprotected)
-                .AddComponent("Class1", ComponentType.ClassModule, inputCode1)
-                .AddComponent("Class2", ComponentType.ClassModule, inputCode2)
-                .Build();
-            var vbe = builder.AddProject(project).Build();
-            var component = project.Object.VBComponents[0];
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(
+                "Class1",
+                selection,
+                presenterAction,
+                null,
+                false,
+                ("Class1", inputCode1, ComponentType.ClassModule),
+                ("Class2", inputCode2, ComponentType.ClassModule));
 
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-            var module1 = project.Object.VBComponents[0].CodeModule;
-            var module2 = project.Object.VBComponents[1].CodeModule;
-
-            //Specify Params to remove
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            //SetupFactory
-            var factory = SetupFactory(model);
-
-            //Act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //Assert
-            Assert.AreEqual(expectedCode1, module1.Content());
-            Assert.AreEqual(expectedCode2, module2.Content());
+            Assert.AreEqual(expectedCode1, actualCode["Class1"]);
+            Assert.AreEqual(expectedCode2, actualCode["Class2"]);
         }
 
-        [TestMethod]
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
         public void ReorderParametersRefactoring_EventParamsSwapped_DifferentParamNames_TwoHandlers()
         {
             //Input
             const string inputCode1 =
-@"Public Event Foo(ByVal arg1 As Integer, ByVal arg2 As String)";
+                @"Public Event Foo(ByVal arg1 As Integer, ByVal arg2 As String)";
 
             const string inputCode2 =
-@"Private WithEvents abc As Class1
+                @"Private WithEvents abc As Class1
 
 Private Sub abc_Foo(ByVal i As Integer, ByVal s As String)
 End Sub";
             const string inputCode3 =
-@"Private WithEvents abc As Class1
+                @"Private WithEvents abc As Class1
 
 Private Sub abc_Foo(ByVal v1 As Integer, ByVal v2 As String)
 End Sub";
@@ -1845,274 +1258,125 @@ End Sub";
 
             //Expectation
             const string expectedCode1 =
-@"Public Event Foo(ByVal arg2 As String, ByVal arg1 As Integer)";
+                @"Public Event Foo(ByVal arg2 As String, ByVal arg1 As Integer)";
 
             const string expectedCode2 =
-@"Private WithEvents abc As Class1
+                @"Private WithEvents abc As Class1
 
 Private Sub abc_Foo(ByVal s As String, ByVal i As Integer)
 End Sub";   // note: IDE removes excess spaces
 
             const string expectedCode3 =
-@"Private WithEvents abc As Class1
+                @"Private WithEvents abc As Class1
 
 Private Sub abc_Foo(ByVal v2 As String, ByVal v1 As Integer)
 End Sub";   // note: IDE removes excess spaces
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            var project = builder.ProjectBuilder("TestProject1", ProjectProtection.Unprotected)
-                .AddComponent("Class1", ComponentType.ClassModule, inputCode1)
-                .AddComponent("Class2", ComponentType.ClassModule, inputCode2)
-                .AddComponent("Class3", ComponentType.ClassModule, inputCode3)
-                .Build();
-            var vbe = builder.AddProject(project).Build();
-            var component = project.Object.VBComponents[0];
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(
+                "Class1",
+                selection,
+                presenterAction,
+                null,
+                false,
+                ("Class1", inputCode1, ComponentType.ClassModule),
+                ("Class2", inputCode2, ComponentType.ClassModule),
+                ("Class3", inputCode3, ComponentType.ClassModule));
 
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-            var module1 = project.Object.VBComponents[0].CodeModule;
-            var module2 = project.Object.VBComponents[1].CodeModule;
-            var module3 = project.Object.VBComponents[2].CodeModule;
-
-            //Specify Params to remove
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, null);
-            model.Parameters.Reverse();
-
-            //SetupFactory
-            var factory = SetupFactory(model);
-
-            //Act
-            var refactoring = new ReorderParametersRefactoring(vbe.Object, factory.Object, null);
-            refactoring.Refactor(qualifiedSelection);
-
-            //Assert
-            Assert.AreEqual(expectedCode1, module1.Content());
-            Assert.AreEqual(expectedCode2, module2.Content());
-            Assert.AreEqual(expectedCode3, module3.Content());
+            Assert.AreEqual(expectedCode1, actualCode["Class1"]);
+            Assert.AreEqual(expectedCode2, actualCode["Class2"]);
+            Assert.AreEqual(expectedCode3, actualCode["Class3"]);
         }
 
-        [TestMethod]
-        public void Presenter_AcceptDialog_ReordersProcedureWithTwoParameters()
+        [Test]
+        [Category("Refactorings")]
+        [Category("Reorder Parameters")]
+        public void ReorderParametersRefactoring_ChangesCorrectReferenceArgumentList()
         {
             //Input
-            const string inputCode =
-@"Private Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String)
-End Sub";
-            var selection = new Selection(1, 15, 1, 15);
-
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, new Mock<IMessageBox>().Object);
-            model.Parameters.Reverse();
-
-            var view = new Mock<IReorderParametersDialog>();
-            view.Setup(v => v.ShowDialog()).Returns(DialogResult.OK);
-            view.Setup(v => v.Parameters).Returns(model.Parameters);
-
-            var factory = new ReorderParametersPresenterFactory(vbe.Object, view.Object, parser.State, null);
-
-            var presenter = factory.Create();
-
-            Assert.AreEqual(model.Parameters, presenter.Show().Parameters);
-        }
-
-        [TestMethod]
-        public void Presenter_CancelDialogCreatesNullModel()
-        {
-            //Input
-            const string inputCode =
-@"Private Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String)
-End Sub";
-            var selection = new Selection(1, 15, 1, 15);
-
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var qualifiedSelection = new QualifiedSelection(new QualifiedModuleName(component), selection);
-
-            var model = new ReorderParametersModel(parser.State, qualifiedSelection, new Mock<IMessageBox>().Object);
-
-            var view = new Mock<IReorderParametersDialog>();
-            view.Setup(v => v.ShowDialog()).Returns(DialogResult.Cancel);
-            view.Setup(v => v.Parameters).Returns(model.Parameters);
-
-            var factory = new ReorderParametersPresenterFactory(vbe.Object, view.Object, parser.State, null);
-            var presenter = factory.Create();
-
-            //Act
-            var result = presenter.Show();
-
-            //Assert
-            Assert.IsNull(result);
-        }
-
-        [TestMethod]
-        public void Presenter_ParameterlessMemberCreatesNullModel()
-        {
-            //Input
-            const string inputCode =
-@"Private Sub Foo()
-End Sub";
-            var selection = new Selection(1, 15, 1, 15);
-
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var messageBox = new Mock<IMessageBox>();
-            messageBox.Setup(m => m.Show(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<MessageBoxButtons>(), It.IsAny<MessageBoxIcon>()))
-                      .Returns(DialogResult.OK);
-
-            var factory = new ReorderParametersPresenterFactory(vbe.Object, null, parser.State, messageBox.Object);
-            var presenter = factory.Create();
-
-            //Act
-            var result = presenter.Show();
-
-            //Assert
-            Assert.IsNull(result);
-        }
-
-        [TestMethod]
-        public void Presenter_SingleParameterMemberCreatesNullModel()
-        {
-            //Input
-            const string inputCode =
-@"Private Sub Foo(ByVal arg1 As Integer)
-End Sub";
-            var selection = new Selection(1, 15, 1, 15);
-
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var messageBox = new Mock<IMessageBox>();
-            messageBox.Setup(m => m.Show(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<MessageBoxButtons>(), It.IsAny<MessageBoxIcon>()))
-                      .Returns(DialogResult.OK);
-
-            var factory = new ReorderParametersPresenterFactory(vbe.Object, null, parser.State, messageBox.Object);
-            var presenter = factory.Create();
-
-            //Act
-            var result = presenter.Show();
-
-            //Assert
-            Assert.IsNull(result);
-        }
-
-        [TestMethod]
-        public void Presenter_NullTargetCreatesNullModel()
-        {
-            //Input
-            const string inputCode =
-@"
-Private Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String)
-End Sub";
-            var selection = new Selection(1, 1, 1, 1);
-
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component, selection);
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
-
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
-
-            var factory = new ReorderParametersPresenterFactory(vbe.Object, null, parser.State, null);
-
-            var presenter = factory.Create();
-
-            //Act
-            var result = presenter.Show();
-
-            //Assert
-            Assert.IsNull(result);
-        }
-
-        [TestMethod]
-        public void Factory_NullSelectionCreatesNullPresenter()
-        {
-            //Input
-            const string inputCode =
-@"Private Sub Foo()
+            const string classCode =
+                @"Public Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String)
 End Sub";
 
-            //Arrange
-            var builder = new MockVbeBuilder();
-            IVBComponent component;
-            var vbe = builder.BuildFromSingleStandardModule(inputCode, out component);
-            var mockHost = new Mock<IHostApplication>();
-            mockHost.SetupAllProperties();
-            var parser = MockParser.Create(vbe.Object, new RubberduckParserState(new Mock<ISinks>().Object));
+            const string moduleCode =
+                @"
+Private Function Bar(ByVal i As Integer, ByVal s As String) As Class1
+End Function
 
-            vbe.Setup(v => v.ActiveCodePane).Returns((ICodePane) null);
+Private Sub Baz()
+    Bar(42, ""Hello"").Foo 23, ""Hi""
+End Sub";
 
-            parser.Parse(new CancellationTokenSource());
-            if (parser.State.Status >= ParserState.Error) { Assert.Inconclusive("Parser Error"); }
+            var selection = new Selection(2, 20, 2, 20);
 
-            var factory = new ReorderParametersPresenterFactory(vbe.Object, null, parser.State, null);
+            //Expectation
+            const string expectedClassCode =
+                @"Public Sub Foo(ByVal arg1 As Integer, ByVal arg2 As String)
+End Sub";
 
-            //Act
-            var result = factory.Create();
+            const string expectedModuleCode =
+                @"
+Private Function Bar(ByVal s As String, ByVal i As Integer) As Class1
+End Function
 
-            //Assert
-            Assert.IsNull(result);
+Private Sub Baz()
+    Bar(""Hello"", 42).Foo 23, ""Hi""
+End Sub";
+
+            var presenterAction = ReverseParameters();
+            var actualCode = RefactoredCode(
+                "Module1",
+                selection,
+                presenterAction,
+                null,
+                false,
+                ("Class1", classCode, ComponentType.ClassModule),
+                ("Module1", moduleCode, ComponentType.StandardModule));
+
+            Assert.AreEqual(expectedClassCode, actualCode["Class1"]);
+            Assert.AreEqual(expectedModuleCode, actualCode["Module1"]);
         }
 
-        #region setup
-        private static Mock<IRefactoringPresenterFactory<IReorderParametersPresenter>> SetupFactory(ReorderParametersModel model)
+        protected override IRefactoring TestRefactoring(
+            IRewritingManager rewritingManager, 
+            RubberduckParserState state,
+            IRefactoringPresenterFactory factory, 
+            ISelectionService selectionService)
         {
-            var presenter = new Mock<IReorderParametersPresenter>();
-            presenter.Setup(p => p.Show()).Returns(model);
-
-            var factory = new Mock<IRefactoringPresenterFactory<IReorderParametersPresenter>>();
-            factory.Setup(f => f.Create()).Returns(presenter.Object);
-            return factory;
+            var selectedDeclarationProvider = new SelectedDeclarationProvider(selectionService, state);
+            var uiDispatcherMock = new Mock<IUiDispatcher>();
+            uiDispatcherMock
+                .Setup(m => m.Invoke(It.IsAny<Action>()))
+                .Callback((Action action) => action.Invoke());
+            var baseRefactoring = new ReorderParameterRefactoringAction(state, rewritingManager);
+            return new ReorderParametersRefactoring(baseRefactoring, state, factory, selectionService, selectedDeclarationProvider, uiDispatcherMock.Object);
         }
 
-        #endregion
+        private static Func<ReorderParametersModel, ReorderParametersModel> ReverseParameters()
+        {
+            return model =>
+            {
+                model.Parameters.Reverse();
+                return model;
+            };
+        }
+
+        private static Func<ReorderParametersModel, ReorderParametersModel> ReorderParamIndices(IList<int> newParamIndexOrder)
+        {
+            if (newParamIndexOrder == null)
+            {
+                return model => model;
+            }
+
+            return model =>
+            {
+                var newParamOrder = newParamIndexOrder
+                    .Select(idx => model.Parameters[idx])
+                    .ToList();
+
+                model.Parameters = newParamOrder;
+                return model;
+            };
+        }
     }
 }

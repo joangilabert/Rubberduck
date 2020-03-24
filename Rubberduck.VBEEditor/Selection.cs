@@ -4,26 +4,37 @@ namespace Rubberduck.VBEditor
 {
     public struct Selection : IEquatable<Selection>, IComparable<Selection>
     {
+
+        public Selection(int line, int column) : this(line, column, line, column) { }
+
         public Selection(int startLine, int startColumn, int endLine, int endColumn)
         {
-            _startLine = startLine;
-            _startColumn = startColumn;
-            _endLine = endLine;
-            _endColumn = endColumn;
+            StartLine = startLine;
+            StartColumn = startColumn;
+            EndLine = endLine;
+            EndColumn = endColumn;
         }
 
         /// <summary>
         /// The first character of the first line.
         /// </summary>
-        public static Selection Home
-        {
-            get { return new Selection(1, 1, 1, 1); }
-        }
+        public static Selection Home => new Selection(1, 1, 1, 1);
 
-        public static Selection Empty
-        {
-            get { return new Selection(); }
-        }
+        public static Selection Empty => new Selection();
+
+        public Selection ToZeroBased() => 
+            new Selection(StartLine - 1, StartColumn - 1, EndLine - 1, EndColumn - 1);
+        public Selection ToOneBased() =>
+            new Selection(StartLine + 1, StartColumn + 1, EndLine + 1, EndColumn + 1);
+
+        public Selection ShiftRight(int positions = 1) =>
+            new Selection(StartLine, StartColumn + positions, EndLine, EndColumn + positions);
+
+        public Selection ShiftLeft(int positions = 1) =>
+            new Selection(StartLine, Math.Max(1, StartColumn - positions), EndLine, Math.Max(1, StartColumn - positions));
+
+        public Selection Collapse() =>
+            new Selection(EndLine, EndColumn, EndLine, EndColumn);
 
         public bool IsEmpty()
         {
@@ -66,26 +77,38 @@ namespace Rubberduck.VBEditor
             return false;
         }
 
-        private readonly int _startLine;
-        public int StartLine { get { return _startLine; } }
-        
-        private readonly int _endLine;
-        public int EndLine { get { return _endLine; } }
+        public bool IsSingleCharacter => StartLine == EndLine && StartColumn == EndColumn;
 
-        private readonly int _startColumn;
-        public int StartColumn { get { return _startColumn; } }
-        
-        private readonly int _endColumn;
-        public int EndColumn { get { return _endColumn; } }
+        public Selection PreviousLine => StartLine == 1 ? Home : new Selection(StartLine - 1, 1);
+        public Selection NextLine => new Selection(StartLine + 1, 1);
 
-        public int LineCount { get { return _endLine - _startLine + 1; } }
+        /// <summary>
+        /// Adds each corresponding element of the specified <c>Selection</c> value. Useful for offsetting with a zero-based <c>Selection</c>.
+        /// </summary>
+        public Selection Offset(Selection offset)
+        {
+            return new Selection(StartLine + offset.StartLine, StartColumn + offset.StartColumn, EndLine + offset.EndLine, EndColumn + offset.EndColumn);
+        }
+
+        public int StartLine { get; }
+
+        public int EndLine { get; }
+
+        public int StartColumn { get; }
+
+        public int EndColumn { get; }
+
+        public int LineCount => EndLine - StartLine + 1;
 
         public bool Equals(Selection other)
         {
-            return other.StartLine == StartLine
-                   && other.EndLine == EndLine
-                   && other.StartColumn == StartColumn
-                   && other.EndColumn == EndColumn;
+            return IsSamePosition(other.StartLine, other.StartColumn, StartLine, StartColumn)
+                   && IsSamePosition(other.EndLine, other.EndColumn, EndLine, EndColumn);
+        }
+
+        private static bool IsSamePosition(int line1, int column1, int line2, int column2)
+        {
+            return line1 == line2 && column1 == column2;
         }
 
         public int CompareTo(Selection other)
@@ -104,9 +127,9 @@ namespace Rubberduck.VBEditor
 
         public override string ToString()
         {
-            return (_startLine == _endLine && _startColumn == _endColumn)
-                ? string.Format(VBEEditorText.SelectionLocationPosition, _startLine, _startColumn)
-                : string.Format(VBEEditorText.SelectionLocationRange, _startLine, _startColumn, _endLine, _endColumn);
+            return (StartLine == EndLine && StartColumn == EndColumn)
+                ? string.Format(VBEEditorText.SelectionLocationPosition, StartLine, StartColumn)
+                : string.Format(VBEEditorText.SelectionLocationRange, StartLine, StartColumn, EndLine, EndColumn);
         }
 
         public static bool operator ==(Selection selection1, Selection selection2)
@@ -119,25 +142,51 @@ namespace Rubberduck.VBEditor
             return !(selection1 == selection2);
         }
 
+        /// <summary>
+        /// Orders first by start position and then end position.
+        /// </summary>
         public static bool operator >(Selection selection1, Selection selection2)
         {
-            return selection1.StartLine > selection2.StartLine ||
-                   selection1.StartLine == selection2.StartLine &&
-                   selection1.StartColumn > selection2.StartColumn;
+            return IsGreaterPosition(selection1.StartLine, selection1.StartColumn, selection2.StartLine, selection2.StartColumn)
+                || IsSamePosition(selection1.StartLine, selection1.StartColumn, selection2.StartLine, selection2.StartColumn)
+                    && IsGreaterPosition(selection1.EndLine, selection1.EndColumn, selection2.EndLine, selection2.EndColumn);
         }
 
+        private static bool IsGreaterPosition(int line1, int column1, int line2, int column2)
+        {
+            return line1 > line2 
+                || line1 == line2 
+                    && column1 > column2;
+        }
+
+        /// <summary>
+        /// Orders first by start position and then end position.
+        /// </summary>
         public static bool operator <(Selection selection1, Selection selection2)
         {
-            return selection1.StartLine < selection2.StartLine ||
-                   selection1.StartLine == selection2.StartLine &&
-                   selection1.StartColumn < selection2.StartColumn;
+            return IsLesserPosition(selection1.StartLine, selection1.StartColumn, selection2.StartLine, selection2.StartColumn)
+                || IsSamePosition(selection1.StartLine, selection1.StartColumn, selection2.StartLine, selection2.StartColumn)
+                    && IsLesserPosition(selection1.EndLine, selection1.EndColumn, selection2.EndLine, selection2.EndColumn);
         }
 
+        private static bool IsLesserPosition(int line1, int column1, int line2, int column2)
+        {
+            return line1 < line2
+                || line1 == line2
+                    && column1 < column2;
+        }
+
+        /// <summary>
+        /// Orders first by start position and then end position.
+        /// </summary>
         public static bool operator >=(Selection selection1, Selection selection2)
         {
             return !(selection1 < selection2);
         }
 
+        /// <summary>
+        /// Orders first by start position and then end position.
+        /// </summary>
         public static bool operator <=(Selection selection1, Selection selection2)
         {
             return !(selection1 > selection2);
